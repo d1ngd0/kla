@@ -1,0 +1,15 @@
+[package]
+name = "krla"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.0.14", features = ["derive"] }
+http = "0.2.8"
+reqwest = {version = "0.11.12", features = ["blocking"]}
+thiserror = "1.0.37"
+tokio = { version = "1.21.2", features = ["full"]}
+toml = "0.5.9"
+url = "2.3.1"
