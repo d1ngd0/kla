@@ -1,8 +1,12 @@
 use clap::Parser;
-use reqwest::{ Method, Body, Client, Url, header::{ HeaderMap, HeaderValue } };
+use client::Client;
 use http::method::InvalidMethod;
-use url::ParseError;
+use reqwest::{
+    header::{HeaderMap, HeaderValue},
+    Body, Method, Url,
+};
 use std::str::FromStr;
+use url::ParseError;
 
 mod client;
 
@@ -67,21 +71,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
-    let client = Client::builder()
-        .default_headers(headers)
-        .build()
-        .expect("could not build client");
+    let client = Client::new("", headers)?;
 
-    let mut builder = client.request(
-        args.method().expect("could not build method"), 
-        args.url().expect("could not build url"),
-    );
+    let content = client
+        .send(args.method()?, args.url()?, args.body())
+        .await?
+        .text()
+        .await?;
 
-    if let Some(body) = args.body() {
-        builder = builder.body(body);
-    }
-
-    let content = builder.send().await?.text().await?;
     print!("{:?}", content);
     Ok(())
 }

@@ -1,11 +1,10 @@
 use http::HeaderMap;
-use reqwest::{ Url, Method, Body };
+use reqwest::{Body, Method, Response, Url};
 
-#[derive(thiserror::Error)]
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Could not create client")]
-    ClientError(String)
+    ClientError(String),
 }
 
 impl std::convert::From<reqwest::Error> for Error {
@@ -16,18 +15,31 @@ impl std::convert::From<reqwest::Error> for Error {
 
 pub struct Client {
     prefix: String,
-    client:  reqwest::Client,
+    client: reqwest::Client,
 }
 
 impl Client {
-    fn new(prefix: &str, headers: HeaderMap) -> Result<Client, Error> {
-        Ok(Client{ 
+    pub fn new(prefix: &str, headers: HeaderMap) -> Result<Client, Error> {
+        Ok(Client {
             prefix: String::from(prefix),
             client: reqwest::Client::builder()
                 .default_headers(headers)
-                .build()?
+                .build()?,
         })
     }
 
-    fn Send(&self, method: Method, url: Url, body: Option<Body>) -> 
+    pub async fn send(
+        &self,
+        method: Method,
+        url: Url,
+        body: Option<Body>,
+    ) -> Result<Response, Error> {
+        let mut builder = self.client.request(method, url);
+
+        if let Some(body) = body {
+            builder = builder.body(body);
+        }
+
+        Ok(builder.send().await?)
+    }
 }
