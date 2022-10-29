@@ -65,6 +65,14 @@ impl RootArgs {
         let body = self.arg3.as_ref()?;
         Some(Body::from(body.clone()))
     }
+
+    fn env(&self) -> String {
+        if let Some(s) = self.env.as_ref() {
+            String::from(s)
+        } else {
+            String::from("")
+        }
+    }
 }
 
 #[tokio::main]
@@ -76,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
-    let client = Client::new(&conf.prefix(args.env[..], headers)?;
+    let client = Client::new(conf.prefix(args.env().as_str()).as_str(), headers)?;
 
     let content = client
         .send(args.method()?, args.url()?, args.body())
