@@ -1,5 +1,4 @@
 use clap::Parser;
-use client::Client;
 use http::method::InvalidMethod;
 use reqwest::{
     header::{HeaderMap, HeaderValue},
@@ -9,6 +8,10 @@ use std::str::FromStr;
 use url::ParseError;
 
 mod client;
+use client::Client;
+
+mod konfig;
+use konfig::Config;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -68,10 +71,12 @@ impl RootArgs {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = RootArgs::parse();
 
+    let conf = Config::new("config.toml")?;
+
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
-    let client = Client::new("", headers)?;
+    let client = Client::new(&conf.prefix(args.env[..], headers)?;
 
     let content = client
         .send(args.method()?, args.url()?, args.body())
