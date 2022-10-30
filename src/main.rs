@@ -41,14 +41,23 @@ struct RootArgs {
 
 impl RootArgs {
     // url will return the url as supplied by the arguments
-    fn url(&self) -> Result<Url, ParseError> {
+    fn url(&self, prefix: &str) -> Result<Url, ParseError> {
+        let mut uri = "/";
+
         if let Some(arg) = self.arg2.as_ref() {
-            Url::parse(arg.as_str())
+            uri = arg.as_str();
         } else if let Some(arg) = self.arg1.as_ref() {
-            Url::parse(arg.as_str())
-        } else {
-            Url::parse("/")
+            uri = arg.as_str();
         }
+
+        let mut url = match prefix.strip_suffix("/") {
+            Some(p) => String::from(p),
+            None => String::from(prefix),
+        };
+
+        url.push_str(uri);
+
+        Url::parse(url.as_str())
     }
 
     fn method(&self) -> Result<Method, InvalidMethod> {
@@ -84,10 +93,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
-    let client = Client::new(conf.prefix(args.env().as_str()).as_str(), headers)?;
+    let prefix = conf.prefix(args.env().as_str());
+    let client = Client::new(headers)?;
 
     let content = client
-        .send(args.method()?, args.url()?, args.body())
+        .send(args.method()?, args.url(prefix.as_str())?, args.body())
         .await?
         .text()
         .await?;

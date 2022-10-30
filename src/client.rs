@@ -14,14 +14,12 @@ impl std::convert::From<reqwest::Error> for Error {
 }
 
 pub struct Client {
-    prefix: String,
     client: reqwest::Client,
 }
 
 impl Client {
-    pub fn new(prefix: &str, headers: HeaderMap) -> Result<Client, Error> {
+    pub fn new(headers: HeaderMap) -> Result<Client, Error> {
         Ok(Client {
-            prefix: String::from(prefix),
             client: reqwest::Client::builder()
                 .default_headers(headers)
                 .build()?,
