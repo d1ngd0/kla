@@ -11,11 +11,71 @@ use tera::{Context, Tera};
 
 use serde_json::Value;
 
-mod client;
-use client::Client;
+mod klient;
+use klient::Client;
 
 mod konfig;
 use konfig::Config;
+
+#[derive(thiserror::Error, Debug)]
+enum Error {
+    #[error("Invalid JSON Body")]
+    BodyParsingError(String),
+    #[error("Configuration Error")]
+    ConfigError(String),
+    #[error("Could not create client")]
+    ClientError(String),
+    #[error("Could not create template")]
+    TemplateError(String),
+    #[error("Invalid Method")]
+    InvalidMethod,
+    #[error("Invalid Url")]
+    InvalidURL,
+    #[error("Body not UTF-8")]
+    InvalidBody,
+}
+
+impl std::convert::From<std::str::Utf8Error> for Error {
+    fn from(_: std::str::Utf8Error) -> Self {
+        Error::InvalidBody
+    }
+}
+
+impl std::convert::From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Error::BodyParsingError(err.to_string())
+    }
+}
+
+impl std::convert::From<konfig::Error> for Error {
+    fn from(err: konfig::Error) -> Self {
+        Error::ConfigError(err.to_string())
+    }
+}
+
+impl std::convert::From<klient::Error> for Error {
+    fn from(err: klient::Error) -> Self {
+        Error::ClientError(err.to_string())
+    }
+}
+
+impl std::convert::From<tera::Error> for Error {
+    fn from(err: tera::Error) -> Self {
+        Error::TemplateError(err.to_string())
+    }
+}
+
+impl std::convert::From<InvalidMethod> for Error {
+    fn from(_: InvalidMethod) -> Self {
+        Error::InvalidMethod
+    }
+}
+
+impl std::convert::From<ParseError> for Error {
+    fn from(_: ParseError) -> Self {
+        Error::InvalidURL
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -90,21 +150,21 @@ impl RootArgs {
         }
     }
 
-    fn template(&self) -> Result<Tera, tera::Error> {
+    fn template(&self, name: &str) -> Result<Tera, tera::Error> {
         let mut tera = Tera::default();
         let template = match self.template.as_ref() {
             Some(v) => v.as_str(),
-            None => "{{ body }}",
+            None => "{{ body | json_encode(pretty=true) }}",
         };
 
-        tera.add_raw_template("output", template)?;
+        tera.add_raw_template(name, template)?;
 
         Ok(tera)
     }
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Error> {
     let args = RootArgs::parse();
 
     let conf = Config::new("config.toml")?;
@@ -114,18 +174,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let prefix = conf.prefix(args.env().as_str());
     let client = Client::new(headers)?;
-    let template = args.template()?;
+    let template = args.template("output")?;
 
     let content = client
         .send(args.method()?, args.url(prefix.as_str())?, args.body())
         .await?
         .text()
-        .await?;
+        .await
+        .unwrap();
 
     let resp_body = from_utf8(content.as_bytes())?;
-    let mut context = Context::new();
-    context.insert("body", serde_json::from_str::<Value>(resp_body)?);
 
-    print!("{:?}", content);
+    match serde_json::from_str::<Value>(resp_body) {
+        Err(_) => print!("{}", content),
+        Ok(v) => {
+            let mut context = Context::new();
+            context.insert("body", &v);
+            let res = template.render("output", &context)?;
+            print!("{}", res)
+        }
+    }
+
     Ok(())
 }

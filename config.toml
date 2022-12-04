@@ -1,2 +1,3 @@
 [environments]
 github = "https://api.github.com/"
+bored = "https://www.boredapi.com/api"
