@@ -4,8 +4,12 @@ use reqwest::{
     header::{HeaderMap, HeaderValue},
     Body, Method, Url,
 };
-use std::str::FromStr;
+use std::str::{from_utf8, FromStr};
 use url::ParseError;
+
+use tera::{Context, Tera};
+
+use serde_json::Value;
 
 mod client;
 use client::Client;
@@ -37,6 +41,9 @@ struct RootArgs {
 
     #[arg(short, long)]
     env: Option<String>,
+
+    #[arg(short, long)]
+    template: Option<String>,
 }
 
 impl RootArgs {
@@ -82,6 +89,18 @@ impl RootArgs {
             String::from("")
         }
     }
+
+    fn template(&self) -> Result<Tera, tera::Error> {
+        let mut tera = Tera::default();
+        let template = match self.template.as_ref() {
+            Some(v) => v.as_str(),
+            None => "{{ body }}",
+        };
+
+        tera.add_raw_template("output", template)?;
+
+        Ok(tera)
+    }
 }
 
 #[tokio::main]
@@ -95,12 +114,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let prefix = conf.prefix(args.env().as_str());
     let client = Client::new(headers)?;
+    let template = args.template()?;
 
     let content = client
         .send(args.method()?, args.url(prefix.as_str())?, args.body())
         .await?
         .text()
         .await?;
+
+    let resp_body = from_utf8(content.as_bytes())?;
+    let mut context = Context::new();
+    context.insert("body", serde_json::from_str::<Value>(resp_body)?);
 
     print!("{:?}", content);
     Ok(())
