@@ -1,10 +1,5 @@
+use super::error::Error;
 use config::{File, FileFormat};
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Config error")]
-    ConfigError(String),
-}
 
 impl std::convert::From<config::ConfigError> for Error {
     fn from(err: config::ConfigError) -> Self {

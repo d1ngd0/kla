@@ -1,11 +1,6 @@
+use super::error::Error;
 use http::HeaderMap;
 use reqwest::{Body, Method, Response, Url};
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Could not create client")]
-    ClientError(String),
-}
 
 impl std::convert::From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
