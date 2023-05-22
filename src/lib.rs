@@ -1,56 +1,55 @@
-use http::method::InvalidMethod;
 use reqwest::{
     header::{HeaderMap, HeaderValue},
     Body, Method, Url,
 };
 use serde_json::Value;
-use std::str::{self, FromStr};
+use std::{
+    fs,
+    str::{self, FromStr},
+};
 use tera::{Context, Tera};
-use url::ParseError;
 
 mod error;
-mod klient;
-mod konfig;
 
 pub use crate::error::Error;
-pub use crate::klient::Client;
-pub use crate::konfig::Config;
+use config::Config;
 
-pub async fn request(args: RequestArgs, conf: Config) -> Result<(), Error> {
+pub async fn request(args: RequestArgs) -> Result<(), Error> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
-    let prefix = conf.prefix(args.env().as_str());
-    let client = Client::new(headers)?;
-    let template = args.template("output")?;
+    let client = reqwest::Client::builder()
+        .default_headers(headers)
+        .build()?;
 
-    let content = client
-        .send(args.method()?, args.url(prefix.as_str())?, args.body())
-        .await?
-        .text()
-        .await
-        .unwrap();
+    let mut request = client.request(args.method, args.url);
 
-    let resp_body = str::from_utf8(content.as_bytes())?;
-
-    match serde_json::from_str::<Value>(resp_body) {
-        Err(_) => print!("{}", content),
-        Ok(v) => {
-            let mut context = Context::new();
-            context.insert("body", &v);
-            let res = template.render("output", &context)?;
-            print!("{}", res)
-        }
+    if let Some(body) = args.body {
+        request = request.body(body);
     }
+
+    let content = request.send().await?.text().await.unwrap();
+
+    let bbody = str::from_utf8(content.as_bytes())?;
+    let body = serde_json::from_str::<Value>(bbody);
+
+    if let Err(_) = body {
+        print!("{}", bbody);
+        return Ok(());
+    }
+
+    let mut context = Context::new();
+    context.insert("body", &body.unwrap());
+    let res = args.template.render("_", &context)?;
+    print!("{}", res);
 
     Ok(())
 }
 
 pub struct RequestArgs {
     method: Method,
-    uri: String,
+    url: Url,
     body: Option<Body>,
-    env: String,
     template: Tera,
 }
 
@@ -58,8 +57,8 @@ pub struct RequestArgsBuilder {
     method: Option<String>,
     uri: Option<String>,
     body: Option<String>,
-    env: Option<String>,
-    template: Option<Tera>,
+    prefix: Option<String>,
+    template: Option<String>,
 }
 
 impl RequestArgsBuilder {
@@ -68,7 +67,7 @@ impl RequestArgsBuilder {
             method: None,
             uri: None,
             body: None,
-            env: None,
+            prefix: None,
             template: None,
         }
     }
@@ -109,6 +108,89 @@ impl RequestArgsBuilder {
         Ok(self)
     }
 
+    pub fn environment(mut self, env: &str, config: Config) -> Result<RequestArgsBuilder, Error> {
+        let mut s = String::from("environments.");
+        s.push_str(env);
+
+        let prefix = config.get_string(&s)?;
+        self.prefix = Some(prefix);
+
+        Ok(self)
+    }
+
+    fn build_body(body: Option<String>) -> Result<Option<Body>, Error> {
+        if let None = body {
+            return Ok(None);
+        }
+
+        let body = body.unwrap();
+        let mut body_chars = body.chars();
+
+        match body_chars.next() {
+            Some('@') => {
+                let name = body_chars.collect::<String>();
+                Ok(Some(Body::from(fs::read_to_string(name)?)))
+            }
+            Some(_) => Ok(Some(Body::from(body))),
+            None => Ok(None),
+        }
+    }
+
+    fn build_template(template: Option<String>) -> Result<Tera, Error> {
+        let mut tera = Tera::default();
+
+        if let None = template {
+            tera.add_raw_template("_", "{{ body | json_encode(pretty=true) }}")?;
+            return Ok(tera);
+        }
+
+        let template = template.unwrap();
+        let mut template_chars = template.chars();
+
+        match template_chars.next() {
+            Some('@') => {
+                let name: String = template_chars.collect::<String>();
+                let content = fs::read_to_string(&name)?;
+                tera.add_raw_template("_", &content)?;
+            }
+            Some(_) => tera.add_raw_template("_", &template)?,
+            None => tera.add_raw_template("_", "{{ body | json_encode(pretty=true) }}")?,
+        };
+
+        Ok(tera)
+    }
+
+    pub fn template(mut self, template: Option<String>) -> RequestArgsBuilder {
+        self.template = template;
+        self
+    }
+
     // build will build the thinger
-    pub fn build(self) -> RequestArgs {}
+    pub fn build(self) -> Result<RequestArgs, Error> {
+        let RequestArgsBuilder {
+            method,
+            uri,
+            body,
+            prefix,
+            template,
+        } = self;
+
+        let method = if let Some(method) = method {
+            Method::from_str(&method)?
+        } else {
+            Method::GET
+        };
+
+        let mut url = uri.unwrap_or(String::from("/"));
+        if let Some(prefix) = prefix {
+            url.insert_str(0, &prefix)
+        }
+
+        Ok(RequestArgs {
+            method,
+            url: Url::parse(&url)?,
+            body: RequestArgsBuilder::build_body(body)?,
+            template: RequestArgsBuilder::build_template(template)?,
+        })
+    }
 }
