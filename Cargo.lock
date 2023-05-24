@@ -673,7 +673,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "krla"
+name = "kla"
 version = "0.1.0"
 dependencies = [
  "clap",
