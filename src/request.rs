@@ -105,7 +105,7 @@ impl RequestArgsBuilder {
         Ok(self)
     }
 
-    pub fn environment(mut self, env: &str, config: Config) -> Result<RequestArgsBuilder, Error> {
+    pub fn environment(mut self, env: &str, config: &Config) -> Result<RequestArgsBuilder, Error> {
         let mut s = String::from("environments.");
         s.push_str(env);
 

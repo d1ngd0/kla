@@ -20,6 +20,12 @@ pub enum Error {
     InvalidBody,
 }
 
+impl std::convert::From<regex::Error> for Error {
+    fn from(err: regex::Error) -> Self {
+        Error::InvalidArguments(err.to_string())
+    }
+}
+
 impl std::convert::From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
         Error::ClientError(err.to_string())
