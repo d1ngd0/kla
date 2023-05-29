@@ -24,6 +24,7 @@ async fn main() -> Result<(), Error> {
         )
         .arg(arg!(-e --env <ENVIRONMENT> "The environment we will run the request against").required(false))
         .arg(arg!(-t --template <TEMPLATE> "The template to use when formating the output. prepending with @ will read a file."))
+        .arg(arg!(-o --output <FILE> "The file to write the output into"))
         .arg(Arg::new("args").action(ArgAction::Append))
         .get_matches();
 
@@ -64,6 +65,10 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
 
     if let Some(env) = args.get_one::<String>("env") {
         reqb = reqb.environment(env, conf)?
+    }
+
+    if let Some(output) = args.get_one::<String>("output") {
+        reqb = reqb.output(output.clone())
     }
 
     let req_args = reqb.build()?;

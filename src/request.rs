@@ -6,12 +6,13 @@ use reqwest::{
 };
 use serde_json::Value;
 use std::{
-    fs,
+    fs::{self, File},
+    io::{self, Read, Write},
     str::{self, FromStr},
 };
 use tera::{Context, Tera};
 
-pub async fn request(args: RequestArgs) -> Result<(), Error> {
+pub async fn request(mut args: RequestArgs) -> Result<(), Error> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
@@ -31,16 +32,47 @@ pub async fn request(args: RequestArgs) -> Result<(), Error> {
     let body = serde_json::from_str::<Value>(bbody);
 
     if let Err(_) = body {
-        print!("{}", bbody);
+        args.output.write(bbody.as_bytes())?;
         return Ok(());
     }
 
     let mut context = Context::new();
     context.insert("body", &body.unwrap());
     let res = args.template.render("_", &context)?;
-    print!("{}", res);
 
+    args.output.write(res.as_bytes())?;
     Ok(())
+}
+
+pub enum OutputType {
+    File(Box<File>),
+    StdOut,
+}
+
+impl io::Write for OutputType {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            OutputType::StdOut => {
+                print!(
+                    "{}",
+                    str::from_utf8(buf)
+                        .unwrap_or("Binary data, unsafe to write to write to standard out")
+                );
+                Ok(buf.len())
+            }
+            OutputType::File(file) => {
+                file.as_mut().write_all(buf)?;
+                Ok(buf.len())
+            }
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            OutputType::StdOut => Ok(()),
+            OutputType::File(file) => file.as_mut().flush(),
+        }
+    }
 }
 
 pub struct RequestArgs {
@@ -48,6 +80,7 @@ pub struct RequestArgs {
     url: Url,
     body: Option<Body>,
     template: Tera,
+    output: OutputType,
 }
 
 pub struct RequestArgsBuilder {
@@ -56,6 +89,7 @@ pub struct RequestArgsBuilder {
     body: Option<String>,
     prefix: Option<String>,
     template: Option<String>,
+    output: Option<String>,
 }
 
 impl RequestArgsBuilder {
@@ -66,6 +100,7 @@ impl RequestArgsBuilder {
             body: None,
             prefix: None,
             template: None,
+            output: None,
         }
     }
     // arg 1 - 3 are to function in the following way
@@ -105,6 +140,11 @@ impl RequestArgsBuilder {
         Ok(self)
     }
 
+    pub fn output_file(mut self, path: &str) -> Result<RequestArgsBuilder, Error> {
+        self.output = Some(String::from(path));
+        Ok(self)
+    }
+
     pub fn environment(mut self, env: &str, config: &Config) -> Result<RequestArgsBuilder, Error> {
         let mut s = String::from("environments.");
         s.push_str(env);
@@ -128,6 +168,11 @@ impl RequestArgsBuilder {
             Some('@') => {
                 let name = body_chars.collect::<String>();
                 Ok(Some(Body::from(fs::read_to_string(name)?)))
+            }
+            Some('-') => {
+                let mut buf = String::new();
+                io::stdin().read_to_string(&mut buf)?;
+                Ok(Some(Body::from(buf)))
             }
             Some(_) => Ok(Some(Body::from(body))),
             None => Ok(None),
@@ -158,6 +203,18 @@ impl RequestArgsBuilder {
         Ok(tera)
     }
 
+    fn build_output(path: Option<String>) -> Result<OutputType, Error> {
+        match path {
+            None => Ok(OutputType::StdOut),
+            Some(path) => Ok(OutputType::File(Box::new(File::create(&path)?))),
+        }
+    }
+
+    pub fn output(mut self, output: String) -> RequestArgsBuilder {
+        self.output = Some(output);
+        self
+    }
+
     pub fn template(mut self, template: Option<String>) -> RequestArgsBuilder {
         self.template = template;
         self
@@ -171,6 +228,7 @@ impl RequestArgsBuilder {
             body,
             prefix,
             template,
+            output,
         } = self;
 
         let method = if let Some(method) = method {
@@ -189,6 +247,7 @@ impl RequestArgsBuilder {
             url: Url::parse(&url)?,
             body: RequestArgsBuilder::build_body(body)?,
             template: RequestArgsBuilder::build_template(template)?,
+            output: RequestArgsBuilder::build_output(output)?,
         })
     }
 }
