@@ -1,4 +1,4 @@
-use super::error::Error;
+use super::{authentication::AuthType, error::Error, output_type::OutputType};
 use config::Config;
 use reqwest::{
     header::{HeaderMap, HeaderValue},
@@ -21,6 +21,7 @@ pub async fn request(mut args: RequestArgs) -> Result<(), Error> {
         .build()?;
 
     let mut request = client.request(args.method, args.url);
+    request = args.auth.apply(request);
 
     if let Some(body) = args.body {
         request = request.body(body);
@@ -44,43 +45,13 @@ pub async fn request(mut args: RequestArgs) -> Result<(), Error> {
     Ok(())
 }
 
-pub enum OutputType {
-    File(Box<File>),
-    StdOut,
-}
-
-impl io::Write for OutputType {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        match self {
-            OutputType::StdOut => {
-                print!(
-                    "{}",
-                    str::from_utf8(buf)
-                        .unwrap_or("Binary data, unsafe to write to write to standard out")
-                );
-                Ok(buf.len())
-            }
-            OutputType::File(file) => {
-                file.as_mut().write_all(buf)?;
-                Ok(buf.len())
-            }
-        }
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        match self {
-            OutputType::StdOut => Ok(()),
-            OutputType::File(file) => file.as_mut().flush(),
-        }
-    }
-}
-
 pub struct RequestArgs {
     method: Method,
     url: Url,
     body: Option<Body>,
     template: Tera,
     output: OutputType,
+    auth: AuthType,
 }
 
 pub struct RequestArgsBuilder {
@@ -90,6 +61,8 @@ pub struct RequestArgsBuilder {
     prefix: Option<String>,
     template: Option<String>,
     output: Option<String>,
+    basic_auth: Option<String>,
+    bearer_token: Option<String>,
 }
 
 impl RequestArgsBuilder {
@@ -101,6 +74,8 @@ impl RequestArgsBuilder {
             prefix: None,
             template: None,
             output: None,
+            basic_auth: None,
+            bearer_token: None,
         }
     }
     // arg 1 - 3 are to function in the following way
@@ -210,6 +185,49 @@ impl RequestArgsBuilder {
         }
     }
 
+    fn parse_bearer_token(token: String) -> Result<AuthType, Error> {
+        let mut chars = token.chars();
+
+        match chars.next() {
+            Some('@') => {
+                let name = chars.collect::<String>();
+                Ok(AuthType::bearer_from_file(&name)?)
+            }
+            Some(_) => Ok(AuthType::bearer_from_string(token)),
+            None => Err(Error::InvalidArguments(String::from(
+                "no bearer token supplied",
+            ))),
+        }
+    }
+
+    fn parse_basic_auth(basic: String) -> Result<AuthType, Error> {
+        let mut chars = basic.chars();
+
+        match chars.next() {
+            Some('@') => {
+                let name = chars.collect::<String>();
+                Ok(AuthType::basic_from_file(&name)?)
+            }
+            Some(_) => AuthType::basic_from_string(&basic),
+            None => Err(Error::InvalidArguments(String::from(
+                "no basic authentication supplied",
+            ))),
+        }
+    }
+
+    fn build_auth(
+        bearer_token: Option<String>,
+        basic_auth: Option<String>,
+    ) -> Result<AuthType, Error> {
+        if let Some(bearer_token) = bearer_token {
+            RequestArgsBuilder::parse_bearer_token(bearer_token)
+        } else if let Some(basic_auth) = basic_auth {
+            RequestArgsBuilder::parse_basic_auth(basic_auth)
+        } else {
+            Ok(AuthType::None)
+        }
+    }
+
     pub fn output(mut self, output: String) -> RequestArgsBuilder {
         self.output = Some(output);
         self
@@ -217,6 +235,16 @@ impl RequestArgsBuilder {
 
     pub fn template(mut self, template: Option<String>) -> RequestArgsBuilder {
         self.template = template;
+        self
+    }
+
+    pub fn bearer_token(mut self, bearer_token: String) -> RequestArgsBuilder {
+        self.bearer_token = Some(bearer_token);
+        self
+    }
+
+    pub fn basic_auth(mut self, basic_auth: String) -> RequestArgsBuilder {
+        self.basic_auth = Some(basic_auth);
         self
     }
 
@@ -229,6 +257,8 @@ impl RequestArgsBuilder {
             prefix,
             template,
             output,
+            basic_auth,
+            bearer_token,
         } = self;
 
         let method = if let Some(method) = method {
@@ -248,6 +278,7 @@ impl RequestArgsBuilder {
             body: RequestArgsBuilder::build_body(body)?,
             template: RequestArgsBuilder::build_template(template)?,
             output: RequestArgsBuilder::build_output(output)?,
+            auth: RequestArgsBuilder::build_auth(basic_auth, bearer_token)?,
         })
     }
 }
