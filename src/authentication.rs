@@ -3,6 +3,20 @@ use core::fmt::Display;
 use reqwest::RequestBuilder;
 use std::fs;
 
+pub trait AuthBuilder {
+    fn authentication(self, authentication: AuthType) -> Self;
+}
+
+impl AuthBuilder for RequestBuilder {
+    fn authentication(self, authentication: AuthType) -> Self {
+        match authentication {
+            AuthType::Bearer(token) => self.bearer_auth(token),
+            AuthType::Basic { username, password } => self.basic_auth(username, Some(password)),
+            AuthType::None => self,
+        }
+    }
+}
+
 pub enum AuthType {
     Bearer(Box<dyn Display>),
     Basic { username: String, password: String },
@@ -44,13 +58,5 @@ impl AuthType {
     pub fn basic_from_file(path: &str) -> Result<AuthType, Error> {
         let s = fs::read_to_string(path)?;
         AuthType::basic_from_string(&s)
-    }
-
-    pub fn apply(&self, request: RequestBuilder) -> RequestBuilder {
-        match self {
-            AuthType::Bearer(token) => request.bearer_auth(token),
-            AuthType::Basic { username, password } => request.basic_auth(username, Some(password)),
-            AuthType::None => request,
-        }
     }
 }

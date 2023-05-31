@@ -1,4 +1,8 @@
-use super::{authentication::AuthType, error::Error, output_type::OutputType};
+use super::{
+    authentication::{AuthBuilder, AuthType},
+    error::Error,
+    output_type::OutputType,
+};
 use config::Config;
 use reqwest::{
     header::{HeaderMap, HeaderValue},
@@ -20,8 +24,9 @@ pub async fn request(mut args: RequestArgs) -> Result<(), Error> {
         .default_headers(headers)
         .build()?;
 
-    let mut request = client.request(args.method, args.url);
-    request = args.auth.apply(request);
+    let mut request = client
+        .request(args.method, args.url)
+        .authentication(args.auth);
 
     if let Some(body) = args.body {
         request = request.body(body);
