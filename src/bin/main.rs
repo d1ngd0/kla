@@ -4,8 +4,6 @@ use config::FileFormat;
 use kla::{Error, OptionalFile, RequestArgsBuilder};
 use regex::Regex;
 
-const VERSION: Option<&str> = option_env!("CARGO_PKG_VERSION");
-
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let conf = Config::builder()
@@ -15,7 +13,6 @@ async fn main() -> Result<(), Error> {
 
     let m = command!()
         .subcommand_required(false)
-        .subcommand(Command::new("version").about("Show the version of this application"))
         .subcommand(
             Command::new("environments")
             .about("Show the environments that are available to you.")
@@ -34,7 +31,6 @@ async fn main() -> Result<(), Error> {
         .get_matches();
 
     match m.subcommand() {
-        Some(("version", _)) => run_version(),
         Some(("environments", envs)) => run_environments(envs, &conf),
         _ => run_root(&m, &conf).await,
     }
@@ -50,11 +46,6 @@ fn run_environments(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
             r.is_match(&k[..]) || r.is_match(&v[..])
         })
         .for_each(|(k, v)| println!("{k} = {v}"));
-    Ok(())
-}
-
-fn run_version() -> Result<(), Error> {
-    println!("Version: {:?}", VERSION.unwrap_or("Not specified"));
     Ok(())
 }
 
