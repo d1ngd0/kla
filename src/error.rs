@@ -1,3 +1,5 @@
+use std::convert::From;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Invalid JSON Body")]
@@ -20,67 +22,67 @@ pub enum Error {
     InvalidBody,
 }
 
-impl std::convert::From<reqwest::header::InvalidHeaderValue> for Error {
+impl From<reqwest::header::InvalidHeaderValue> for Error {
     fn from(err: reqwest::header::InvalidHeaderValue) -> Self {
         Error::InvalidArguments(err.to_string())
     }
 }
 
-impl std::convert::From<reqwest::header::InvalidHeaderName> for Error {
+impl From<reqwest::header::InvalidHeaderName> for Error {
     fn from(err: reqwest::header::InvalidHeaderName) -> Self {
         Error::InvalidArguments(err.to_string())
     }
 }
 
-impl std::convert::From<regex::Error> for Error {
+impl From<regex::Error> for Error {
     fn from(err: regex::Error) -> Self {
         Error::InvalidArguments(err.to_string())
     }
 }
 
-impl std::convert::From<reqwest::Error> for Error {
+impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
         Error::ClientError(err.to_string())
     }
 }
 
-impl std::convert::From<std::io::Error> for Error {
+impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Error::IOError(err.to_string())
     }
 }
 
-impl std::convert::From<std::str::Utf8Error> for Error {
+impl From<std::str::Utf8Error> for Error {
     fn from(_: std::str::Utf8Error) -> Self {
         Error::InvalidBody
     }
 }
 
-impl std::convert::From<serde_json::Error> for Error {
+impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Error::BodyParsingError(err.to_string())
     }
 }
 
-impl std::convert::From<config::ConfigError> for Error {
+impl From<config::ConfigError> for Error {
     fn from(err: config::ConfigError) -> Self {
         Error::ConfigError(err.to_string())
     }
 }
 
-impl std::convert::From<tera::Error> for Error {
+impl From<tera::Error> for Error {
     fn from(err: tera::Error) -> Self {
         Error::TemplateError(err.to_string())
     }
 }
 
-impl std::convert::From<http::method::InvalidMethod> for Error {
+impl From<http::method::InvalidMethod> for Error {
     fn from(_: http::method::InvalidMethod) -> Self {
         Error::InvalidMethod
     }
 }
 
-impl std::convert::From<url::ParseError> for Error {
+impl From<url::ParseError> for Error {
     fn from(_: url::ParseError) -> Self {
         Error::InvalidURL
     }
