@@ -27,6 +27,9 @@ async fn main() -> Result<(), Error> {
         .arg(arg!(-o --output <FILE> "The file to write the output into"))
         .arg(arg!(--basic-auth <BASIC_AUTH> "The username and password seperated by :, a preceding @ denotes a file path."))
         .arg(arg!(--bearer-token <BEARER_TOKEN> "The bearer token to use in requests. A preceding @ denotes a file path."))
+        .arg(arg!(-H --header <HEADER> "Specify a header The key and value should be seperated by a : (eg --header \"Content-Type: application/json\")").action(ArgAction::Append))
+        .arg(arg!(-v --verbose "make it loud and proud").action(ArgAction::SetTrue))
+        .arg(arg!(--dry "don't actually do anything, will automatically enable verbose").action(ArgAction::SetTrue))
         .arg(Arg::new("args").action(ArgAction::Append))
         .get_matches();
 
@@ -56,32 +59,23 @@ fn run_version() -> Result<(), Error> {
 }
 
 async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
-    let mut reqb = RequestArgsBuilder::new()
+    let req_args = RequestArgsBuilder::new()
         .args(
             args.get_many::<String>("args")
                 .unwrap_or_default()
                 .map(|v| v.to_owned())
                 .collect::<Vec<_>>(),
         )?
-        .template(args.get_one::<String>("template").map(|v| v.clone()));
+        .template(args.get_one::<String>("template").map(|v| v.clone()))
+        .environment(args.get_one("env"), conf)?
+        .headers(args.get_many("header"))
+        .output(args.get_one("output"))
+        .bearer_token(args.get_one("bearer-token"))
+        .basic_auth(args.get_one("basic-auth"))
+        .verbose(args.get_one("verbose"))
+        .dry(args.get_one("dry"))
+        .build()?;
 
-    if let Some(env) = args.get_one::<String>("env") {
-        reqb = reqb.environment(env, conf)?;
-    }
-
-    if let Some(output) = args.get_one::<String>("output") {
-        reqb = reqb.output(output.clone());
-    }
-
-    if let Some(bearer_token) = args.get_one::<String>("bearer-token") {
-        reqb = reqb.bearer_token(bearer_token.clone());
-    }
-
-    if let Some(basic_auth) = args.get_one::<String>("basic-auth") {
-        reqb = reqb.basic_auth(basic_auth.clone());
-    }
-
-    let req_args = reqb.build()?;
     kla::request(req_args).await?;
 
     Ok(())

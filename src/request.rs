@@ -5,31 +5,63 @@ use super::{
 };
 use config::Config;
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
+    header::{HeaderMap, HeaderName, HeaderValue},
     Body, Method, Url,
 };
 use serde_json::Value;
 use std::{
+    convert::From,
+    default::Default,
     fs::{self, File},
     io::{self, Read, Write},
     str::{self, FromStr},
 };
 use tera::{Context, Tera};
 
-pub async fn request(mut args: RequestArgs) -> Result<(), Error> {
-    let mut headers = HeaderMap::new();
-    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+struct OwnedHeaders(Vec<(String, String)>);
 
-    let client = reqwest::Client::builder()
-        .default_headers(headers)
-        .build()?;
+impl Default for OwnedHeaders {
+    fn default() -> Self {
+        OwnedHeaders(vec![])
+    }
+}
+
+impl OwnedHeaders {
+    fn as_header_map(&self) -> Result<HeaderMap, Error> {
+        let mut map = HeaderMap::new();
+        self.0
+            .iter()
+            .map(|(key, value)| {
+                map.insert(
+                    HeaderName::from_bytes(key.as_bytes())?,
+                    HeaderValue::from_str(&value[..])?,
+                );
+                Ok(())
+            })
+            .collect::<Result<Vec<()>, Error>>()?;
+
+        Ok(map)
+    }
+}
+
+pub async fn request(mut args: RequestArgs) -> Result<(), Error> {
+    let client = reqwest::Client::builder().build()?;
 
     let mut request = client
         .request(args.method, args.url)
-        .authentication(args.auth);
+        .authentication(args.auth)
+        .headers(args.headers.as_header_map()?);
 
     if let Some(body) = args.body {
         request = request.body(body);
+    }
+
+    if args.verbose {
+        println!("{:?}", request)
+    }
+
+    if args.dry {
+        return Ok(());
     }
 
     let content = request.send().await?.text().await.unwrap();
@@ -57,6 +89,9 @@ pub struct RequestArgs {
     template: Tera,
     output: OutputType,
     auth: AuthType,
+    headers: OwnedHeaders,
+    verbose: bool,
+    dry: bool,
 }
 
 pub struct RequestArgsBuilder {
@@ -68,6 +103,9 @@ pub struct RequestArgsBuilder {
     output: Option<String>,
     basic_auth: Option<String>,
     bearer_token: Option<String>,
+    headers: Option<OwnedHeaders>,
+    verbose: bool,
+    dry: bool,
 }
 
 impl RequestArgsBuilder {
@@ -81,6 +119,9 @@ impl RequestArgsBuilder {
             output: None,
             basic_auth: None,
             bearer_token: None,
+            headers: None,
+            verbose: false,
+            dry: false,
         }
     }
     // arg 1 - 3 are to function in the following way
@@ -120,12 +161,46 @@ impl RequestArgsBuilder {
         Ok(self)
     }
 
+    pub fn headers<'a, T: Iterator<Item = &'a String>>(
+        mut self,
+        headers: Option<T>,
+    ) -> RequestArgsBuilder {
+        if let None = headers {
+            return self;
+        }
+        let headers = headers.unwrap();
+
+        self.headers = Some(OwnedHeaders(
+            headers
+                .filter(|v| v.contains(":"))
+                .map(|v| {
+                    let mut v = v.splitn(2, ":");
+                    (
+                        String::from(v.next().unwrap().trim()),
+                        String::from(v.next().unwrap().trim()),
+                    )
+                })
+                .collect(),
+        ));
+
+        self
+    }
+
     pub fn output_file(mut self, path: &str) -> Result<RequestArgsBuilder, Error> {
         self.output = Some(String::from(path));
         Ok(self)
     }
 
-    pub fn environment(mut self, env: &str, config: &Config) -> Result<RequestArgsBuilder, Error> {
+    pub fn environment(
+        mut self,
+        env: Option<&String>,
+        config: &Config,
+    ) -> Result<RequestArgsBuilder, Error> {
+        if let None = env {
+            return Ok(self);
+        }
+        let env = env.unwrap();
+
         let mut s = String::from("environments.");
         s.push_str(env);
 
@@ -233,8 +308,8 @@ impl RequestArgsBuilder {
         }
     }
 
-    pub fn output(mut self, output: String) -> RequestArgsBuilder {
-        self.output = Some(output);
+    pub fn output(mut self, output: Option<&String>) -> RequestArgsBuilder {
+        self.output = output.cloned();
         self
     }
 
@@ -243,13 +318,35 @@ impl RequestArgsBuilder {
         self
     }
 
-    pub fn bearer_token(mut self, bearer_token: String) -> RequestArgsBuilder {
-        self.bearer_token = Some(bearer_token);
+    pub fn bearer_token(mut self, bearer_token: Option<&String>) -> RequestArgsBuilder {
+        self.bearer_token = bearer_token.cloned();
         self
     }
 
-    pub fn basic_auth(mut self, basic_auth: String) -> RequestArgsBuilder {
-        self.basic_auth = Some(basic_auth);
+    pub fn basic_auth(mut self, basic_auth: Option<&String>) -> RequestArgsBuilder {
+        self.basic_auth = basic_auth.cloned();
+        self
+    }
+
+    pub fn verbose(mut self, verbose: Option<&bool>) -> RequestArgsBuilder {
+        if let None = verbose {
+            return self;
+        }
+
+        self.verbose = *verbose.unwrap();
+        self
+    }
+
+    pub fn dry(mut self, dry: Option<&bool>) -> RequestArgsBuilder {
+        if let None = dry {
+            return self;
+        }
+
+        if *dry.unwrap() {
+            self.verbose = true;
+            self.dry = true;
+        }
+
         self
     }
 
@@ -264,10 +361,13 @@ impl RequestArgsBuilder {
             output,
             basic_auth,
             bearer_token,
+            headers,
+            verbose,
+            dry,
         } = self;
 
         let method = if let Some(method) = method {
-            Method::from_str(&method)?
+            Method::from_str(&method.to_uppercase())?
         } else {
             Method::GET
         };
@@ -279,11 +379,14 @@ impl RequestArgsBuilder {
 
         Ok(RequestArgs {
             method,
+            verbose,
+            dry,
             url: Url::parse(&url)?,
             body: RequestArgsBuilder::build_body(body)?,
             template: RequestArgsBuilder::build_template(template)?,
             output: RequestArgsBuilder::build_output(output)?,
             auth: RequestArgsBuilder::build_auth(basic_auth, bearer_token)?,
+            headers: headers.unwrap_or_default(),
         })
     }
 }
