@@ -1,7 +1,7 @@
 use clap::{arg, command, Arg, ArgAction, ArgMatches, Command};
 use config::Config;
 use config::FileFormat;
-use kla::{Error, KlaClient, KlaClientBuilder, KlaRequestBuilder, OptionalFile};
+use kla::{Error, KlaClient, KlaClientBuilder, KlaRequestBuilder, OptionalFile, TemplateBuilder};
 use regex::Regex;
 use reqwest::ClientBuilder;
 
@@ -23,6 +23,7 @@ async fn main() -> Result<(), Error> {
         .arg(arg!(--agent <AGENT> "The header agent string").default_value("TODO: make it good"))
         .arg(arg!(-e --env <ENVIRONMENT> "The environment we will run the request against").required(false))
         .arg(arg!(-t --template <TEMPLATE> "The template to use when formating the output. prepending with @ will read a file."))
+        .arg(arg!(-t --failure-template <TEMPLATE> "The template to use when formating the failure output. prepending with @ will read a file."))
         .arg(arg!(-o --output <FILE> "The file to write the output into"))
         .arg(arg!(--timeout <SECONDS> "The amount of time allotted for the request to finish"))
         .arg(arg!(--basic-auth <BASIC_AUTH> "The username and password seperated by :, a preceding @ denotes a file path."))
@@ -32,7 +33,7 @@ async fn main() -> Result<(), Error> {
         .arg(arg!(-F --form <FORM> "Specify a form key=value to be passed in the form body").action(ArgAction::Append))
         .arg(arg!(-v --verbose "make it loud and proud").action(ArgAction::SetTrue))
         .arg(arg!(--dry "don't actually do anything, will automatically enable verbose").action(ArgAction::SetTrue))
-        .arg(arg!(--version <HTTP_VERSION> "The version of http to send the request as").value_parser(["0.9", "1.0", "1.1", "2.0", "3.0"]))
+        .arg(arg!(--http-version <HTTP_VERSION> "The version of http to send the request as").value_parser(["0.9", "1.0", "1.1", "2.0", "3.0"]))
         .arg(arg!(--no-gzip "Do not automatically uncompress gzip responses").action(ArgAction::SetTrue))
         .arg(arg!(--no-brotli "Do not automatically uncompress brotli responses").action(ArgAction::SetTrue))
         .arg(arg!(--no-deflate "Do not automatically uncompress deflate responses").action(ArgAction::SetTrue))
@@ -63,27 +64,54 @@ fn run_environments(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
 async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
     let env = kla::environment(args.get_one("env"), conf);
 
-    ClientBuilder::new()
-        .opt_header_agent(args.get_one("agent"))?
-        .gzip(!args.get_one("no-gzip").unwrap_or_default())
-        .brotli(!args.get_one("no-brotli").unwrap_or_default())
-        .deflate(!args.get_one("no-deflate").unwrap_or_default())
-        .connection_verbose(args.get_one("verbose").map(|v| *v).unwrap_or_default())
+    TemplateBuilder::new_opt_file(args.get_one("output"))?
+        .opt_template(args.get_one("template"))?
+        .opt_failure_template(args.get_one("failure-template"))?
+        .request(
+            ClientBuilder::new()
+                .opt_header_agent(args.get_one("agent"))?
+                .gzip(
+                    !args
+                        .get_one::<bool>("no-gzip")
+                        .map(|v| *v)
+                        .unwrap_or_default(),
+                )
+                .brotli(
+                    !args
+                        .get_one::<bool>("no-brotli")
+                        .map(|v| *v)
+                        .unwrap_or_default(),
+                )
+                .deflate(
+                    !args
+                        .get_one::<bool>("no-deflate")
+                        .map(|v| *v)
+                        .unwrap_or_default(),
+                )
+                .connection_verbose(
+                    args.get_one::<bool>("verbose")
+                        .map(|v| *v)
+                        .unwrap_or_default(),
+                )
+                .opt_max_redirects(args.get_one("max-redirects"))
+                .no_redirects(
+                    args.get_one::<bool>("no_redirects")
+                        .map(|v| *v)
+                        .unwrap_or_default(),
+                )
+                .build()?
+                .args(args.get_many("args"), env.as_ref())?
+                .opt_headers(args.get_many("header"))?
+                .opt_bearer_auth(args.get_one("bearer-token"))
+                .opt_basic_auth(args.get_one("basic-auth"))
+                .opt_query(args.get_many("query"))?
+                .opt_form(args.get_many("form"))?
+                .opt_timeout(args.get_one("timeout"))?
+                .opt_version(args.get_one("http-version"))?,
+        )
         .build()?
-        .args(args.get_many("args"), env.as_ref())?
-        .opt_headers(args.get_many("header"))?
-        .opt_bearer_auth(args.get_one("bearer-token"))
-        .opt_basic_auth(args.get_one("basic-auth"))
-        .opt_query(args.get_many("query"))?
-        .opt_form(args.get_many("form"))?
-        .opt_timeout(args.get_one("timeout"))?
-        .opt_version(args.get_one("http-version"))?
-        //.template(args.get_one::<String>("template").map(|v| v.clone()))
-        //.output(args.get_one("output"))
-        //.dry(args.get_one("dry"))
-        .build()?;
-
-    kla::request(req_args).await?;
+        .send()
+        .await?;
 
     Ok(())
 }

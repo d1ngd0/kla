@@ -22,6 +22,12 @@ pub enum Error {
     InvalidBody,
 }
 
+impl From<reqwest::header::ToStrError> for Error {
+    fn from(err: reqwest::header::ToStrError) -> Self {
+        Error::InvalidArguments(err.to_string())
+    }
+}
+
 impl From<reqwest::header::InvalidHeaderValue> for Error {
     fn from(err: reqwest::header::InvalidHeaderValue) -> Self {
         Error::InvalidArguments(err.to_string())
@@ -72,7 +78,7 @@ impl From<config::ConfigError> for Error {
 
 impl From<tera::Error> for Error {
     fn from(err: tera::Error) -> Self {
-        Error::TemplateError(err.to_string())
+        Error::TemplateError(format!("{}", err))
     }
 }
 
