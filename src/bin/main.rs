@@ -39,6 +39,10 @@ async fn main() -> Result<(), Error> {
         .arg(arg!(--no-deflate "Do not automatically uncompress deflate responses").action(ArgAction::SetTrue))
         .arg(arg!(--max-redirects <NUMBER> "The number of redirects allowed"))
         .arg(arg!(--no-redirects "Disable any redirects").action(ArgAction::SetTrue))
+        .arg(arg!(--proxy <PROXY> "The proxy to use for all requests."))
+        .arg(arg!(--proxy-http <PROXY_HTTP> "The proxy to use for http requests."))
+        .arg(arg!(--proxy-https <PROXY_HTTPS> "The proxy to use for https requests."))
+        .arg(arg!(--proxy-auth <PROXY_AUTH> "The username and password seperated by :."))
         .arg(Arg::new("args").action(ArgAction::Append))
         .get_matches();
 
@@ -99,6 +103,9 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
                         .map(|v| *v)
                         .unwrap_or_default(),
                 )
+                .opt_proxy(args.get_one("proxy"), args.get_one("proxy-auth"))?
+                .opt_proxy_http(args.get_one("proxy-http"), args.get_one("proxy-auth"))?
+                .opt_proxy_https(args.get_one("proxy-https"), args.get_one("proxy-auth"))?
                 .build()?
                 .args(args.get_many("args"), env.as_ref())?
                 .opt_headers(args.get_many("header"))?

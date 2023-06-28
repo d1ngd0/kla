@@ -27,6 +27,24 @@ pub trait KlaClientBuilder {
     fn opt_max_redirects(self, redirects: Option<&usize>) -> ClientBuilder;
 
     fn no_redirects(self, no_redirects: bool) -> ClientBuilder;
+
+    fn opt_proxy(
+        self,
+        proxy: Option<&String>,
+        userpass: Option<&String>,
+    ) -> Result<ClientBuilder, Error>;
+
+    fn opt_proxy_http(
+        self,
+        proxy: Option<&String>,
+        userpass: Option<&String>,
+    ) -> Result<ClientBuilder, Error>;
+
+    fn opt_proxy_https(
+        self,
+        proxy: Option<&String>,
+        userpass: Option<&String>,
+    ) -> Result<ClientBuilder, Error>;
 }
 
 impl KlaClientBuilder for ClientBuilder {
@@ -53,6 +71,62 @@ impl KlaClientBuilder for ClientBuilder {
         }
         let agent = HeaderValue::from_str(agent.unwrap())?;
         Ok(self.user_agent(agent))
+    }
+
+    fn opt_proxy(
+        self,
+        proxy: Option<&String>,
+        userpass: Option<&String>,
+    ) -> Result<ClientBuilder, Error> {
+        if let None = proxy {
+            return Ok(self);
+        }
+
+        let proxy = reqwest::Proxy::all(proxy.unwrap())?;
+        if let None = userpass {
+            return Ok(self.proxy(proxy));
+        }
+
+        let mut parts = userpass.unwrap().splitn(2, ":");
+
+        Ok(self.proxy(proxy.basic_auth(parts.next().unwrap(), parts.next().unwrap_or_default())))
+    }
+
+    fn opt_proxy_http(
+        self,
+        proxy: Option<&String>,
+        userpass: Option<&String>,
+    ) -> Result<ClientBuilder, Error> {
+        if let None = proxy {
+            return Ok(self);
+        }
+
+        let proxy = reqwest::Proxy::http(proxy.unwrap())?;
+        if let None = userpass {
+            return Ok(self.proxy(proxy));
+        }
+
+        let mut parts = userpass.unwrap().splitn(2, ":");
+
+        Ok(self.proxy(proxy.basic_auth(parts.next().unwrap(), parts.next().unwrap_or_default())))
+    }
+
+    fn opt_proxy_https(
+        self,
+        proxy: Option<&String>,
+        userpass: Option<&String>,
+    ) -> Result<ClientBuilder, Error> {
+        if let None = proxy {
+            return Ok(self);
+        }
+
+        let proxy = reqwest::Proxy::https(proxy.unwrap())?;
+        if let None = userpass {
+            return Ok(self.proxy(proxy));
+        }
+
+        let mut parts = userpass.unwrap().splitn(2, ":");
+        Ok(self.proxy(proxy.basic_auth(parts.next().unwrap(), parts.next().unwrap_or_default())))
     }
 }
 
