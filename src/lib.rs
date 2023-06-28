@@ -442,12 +442,8 @@ impl TemplateBuilder {
 
     pub fn build(self) -> Result<Template, Error> {
         Ok(Template {
-            template: self.template.ok_or(Error::InvalidArguments(
-                "you must supply a template".to_owned(),
-            ))?,
-            failure_template: self.failure_template.ok_or(Error::InvalidArguments(
-                "you must supply a template".to_owned(),
-            ))?,
+            template: self.template,
+            failure_template: self.failure_template,
             request: self.request.ok_or(Error::InvalidArguments(
                 "you must supply a request".to_owned(),
             ))?,
@@ -458,8 +454,8 @@ impl TemplateBuilder {
 }
 
 pub struct Template {
-    template: Tera,
-    failure_template: Tera,
+    template: Option<Tera>,
+    failure_template: Option<Tera>,
     output: Box<dyn std::io::Write>,
     request: RequestBuilder,
     context: Context,
@@ -506,7 +502,10 @@ impl Template {
         }
         context.insert("resp_body", &content);
 
-        template.render_to("template", &context, &mut output)?;
+        match template {
+            None => output.write_all(content.as_bytes())?,
+            Some(template) => template.render_to("template", &context, &mut output)?,
+        }
 
         Ok(())
     }
