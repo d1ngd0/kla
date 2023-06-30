@@ -15,10 +15,8 @@ async fn main() -> Result<(), Error> {
     let m = command!()
         .subcommand_required(false)
         .subcommand(
-            Command::new("run")
-            .about("run templates defined for the environment")
-            .alias("template")
-            .arg(arg!(-e --env <ENVIRONMENT> "The environment we will run the request against").required(false))
+            new_run()
+            .allow_external_subcommands(true)
         )
         .subcommand(
             Command::new("environments")
@@ -56,13 +54,35 @@ async fn main() -> Result<(), Error> {
 
     match m.subcommand() {
         Some(("environments", envs)) => run_environments(envs, &conf),
-        Some(("run", am)) => run_run(am, &conf).await,
+        Some(("run", _)) => run_run(&conf).await,
         _ => run_root(&m, &conf).await,
     }
 }
 
-async fn run_run(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
-    let env = kla::environment(args.get_one("env"), conf);
+fn new_run() -> Command {
+    Command::new("run")
+        .about("run templates defined for the environment")
+        .alias("template")
+        .arg(
+            arg!(-e --env <ENVIRONMENT> "The environment we will run the request against")
+                .required(false),
+        )
+}
+
+async fn run_run(_conf: &Config) -> Result<(), Error> {
+    // let env = kla::environment(args.get_one("env"), conf);
+
+    let m = command!()
+        .subcommand(new_run().subcommand(Command::new("test").about(
+            "this is a test, it will run nothing and do nothing, because it is nothing, just like the rest of us... and you. NOTHING.",
+        )))
+        .get_matches();
+
+    match m.subcommand() {
+        Some(("test", _)) => println!("test"),
+        _ => println!("no test"),
+    }
+
     Ok(())
 }
 
