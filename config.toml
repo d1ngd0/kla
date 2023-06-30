@@ -1,3 +1,8 @@
-[environments]
-github = "https://api.github.com/"
-bored = "https://www.boredapi.com/api"
+[environment.github]
+url = "https://api.github.com/"
+
+[environment.bored]
+url = "https://www.boredapi.com/api"
+
+[environment.poetry]
+url = "https://poetrydb.org/"

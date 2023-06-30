@@ -467,10 +467,7 @@ pub fn environment(env: Option<&String>, config: &Config) -> Option<String> {
     }
     let env = env.unwrap();
 
-    let mut s = String::from("environments.");
-    s.push_str(env);
-
-    match config.get_string(&s) {
+    match config.get_string(format!("environment.{}.url", env).as_str()) {
         Ok(v) => Some(v),
         Err(_) => None,
     }

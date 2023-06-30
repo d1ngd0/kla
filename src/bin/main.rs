@@ -15,6 +15,12 @@ async fn main() -> Result<(), Error> {
     let m = command!()
         .subcommand_required(false)
         .subcommand(
+            Command::new("run")
+            .about("run templates defined for the environment")
+            .alias("template")
+            .arg(arg!(-e --env <ENVIRONMENT> "The environment we will run the request against").required(false))
+        )
+        .subcommand(
             Command::new("environments")
             .about("Show the environments that are available to you.")
             .alias("envs")
@@ -50,20 +56,30 @@ async fn main() -> Result<(), Error> {
 
     match m.subcommand() {
         Some(("environments", envs)) => run_environments(envs, &conf),
+        Some(("run", am)) => run_run(am, &conf).await,
         _ => run_root(&m, &conf).await,
     }
+}
+
+async fn run_run(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
+    let env = kla::environment(args.get_one("env"), conf);
+    Ok(())
 }
 
 fn run_environments(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
     let r = Regex::new(args.get_one::<String>("regex").unwrap())?;
 
-    conf.get_table("environments")?
+    conf.get_table("environment")?
         .iter()
-        .filter(|(k, v)| {
-            let v = format!("{v}");
-            r.is_match(&k[..]) || r.is_match(&v[..])
-        })
-        .for_each(|(k, v)| println!("{k} = {v}"));
+        .map(|(k, _)| k)
+        .filter(|k| r.is_match(k))
+        .for_each(|k| {
+            println!(
+                "{k} = {}",
+                conf.get_string(format!("environment.{k}.url").as_str())
+                    .unwrap_or_default()
+            )
+        });
     Ok(())
 }
 
