@@ -43,6 +43,8 @@ async fn main() -> Result<(), Error> {
         .arg(arg!(--proxy-http <PROXY_HTTP> "The proxy to use for http requests."))
         .arg(arg!(--proxy-https <PROXY_HTTPS> "The proxy to use for https requests."))
         .arg(arg!(--proxy-auth <PROXY_AUTH> "The username and password seperated by :."))
+        .arg(arg!(--connect-timeout <DURATION> "The amount of time to allow for connection"))
+        .arg(arg!(--certificate <CERTIFICATE_FILE> "The path to the certificate to use for requests. Accepts PEM and DER, expects files to end in .der or .pem. defaults to pem").action(ArgAction::Append))
         .arg(Arg::new("args").action(ArgAction::Append))
         .get_matches();
 
@@ -106,6 +108,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), Error> {
                 .opt_proxy(args.get_one("proxy"), args.get_one("proxy-auth"))?
                 .opt_proxy_http(args.get_one("proxy-http"), args.get_one("proxy-auth"))?
                 .opt_proxy_https(args.get_one("proxy-https"), args.get_one("proxy-auth"))?
+                .opt_certificate(args.get_many("certificate"))?
                 .build()?
                 .args(args.get_many("args"), env.as_ref())?
                 .opt_headers(args.get_many("header"))?

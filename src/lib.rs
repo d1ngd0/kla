@@ -10,13 +10,14 @@ use http::Version;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     redirect::Policy,
-    Body, Client, ClientBuilder, Method, RequestBuilder,
+    Body, Certificate, Client, ClientBuilder, Method, RequestBuilder,
 };
 use std::str::FromStr;
 use std::{
     collections::HashMap,
     fs,
     io::{self, Read},
+    path::Path,
     time::Duration,
 };
 use tera::{Context, Tera};
@@ -45,9 +46,51 @@ pub trait KlaClientBuilder {
         proxy: Option<&String>,
         userpass: Option<&String>,
     ) -> Result<ClientBuilder, Error>;
+
+    fn connect_timeout(self, timeout: Option<&String>) -> Result<ClientBuilder, Error>;
+
+    fn opt_certificate<'a, T>(self, certificates: Option<T>) -> Result<ClientBuilder, Error>
+    where
+        T: Iterator<Item = &'a String>;
 }
 
 impl KlaClientBuilder for ClientBuilder {
+    fn opt_certificate<'a, T>(self, certificates: Option<T>) -> Result<ClientBuilder, Error>
+    where
+        T: Iterator<Item = &'a String>,
+    {
+        if let None = certificates {
+            return Ok(self);
+        }
+        let certificates = certificates.unwrap();
+
+        let mut me = self;
+
+        for certificate in certificates {
+            let ext = Path::new(certificate).extension().and_then(|s| s.to_str());
+            match ext {
+                Some("pem") => {
+                    let pem = fs::read_to_string(certificate)?;
+                    let certificate = Certificate::from_pem(pem.as_bytes())?;
+                    me = me.add_root_certificate(certificate);
+                }
+                Some("der") => {
+                    let pem = fs::read_to_string(certificate)?;
+                    let certificate = Certificate::from_der(pem.as_bytes())?;
+                    me = me.add_root_certificate(certificate);
+                }
+                _ => {
+                    return Err(Error::InvalidArguments(format!(
+                        "Invalid certificate file extension: {}",
+                        certificate
+                    )))
+                }
+            }
+        }
+
+        Ok(me)
+    }
+
     fn no_redirects(self, no_redirects: bool) -> ClientBuilder {
         if no_redirects {
             self.redirect(Policy::none())
@@ -127,6 +170,19 @@ impl KlaClientBuilder for ClientBuilder {
 
         let mut parts = userpass.unwrap().splitn(2, ":");
         Ok(self.proxy(proxy.basic_auth(parts.next().unwrap(), parts.next().unwrap_or_default())))
+    }
+
+    fn connect_timeout(self, timeout: Option<&String>) -> Result<ClientBuilder, Error> {
+        if let None = timeout {
+            return Ok(self);
+        }
+
+        let timeout: Duration = match DurationString::from_str(timeout.unwrap()) {
+            Ok(v) => Ok(v),
+            Err(msg) => Err(Error::InvalidArguments(msg)),
+        }?
+        .into();
+        Ok(self.connect_timeout(timeout))
     }
 }
 
