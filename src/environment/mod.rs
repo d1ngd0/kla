@@ -8,7 +8,7 @@ use std::{
 use std::fs::{self, DirEntry};
 
 use config::{builder::DefaultState, Config, ConfigBuilder, File};
-use reqwest::{ClientBuilder, Request, RequestBuilder};
+use reqwest::{Client, ClientBuilder, Request, RequestBuilder};
 use serde::Deserialize;
 use skim::SkimItem;
 
@@ -17,92 +17,106 @@ use crate::{
     Error, Expand, Result, Sigv4Request,
 };
 
-#[derive(Debug)]
-pub enum Environment {
-    Endpoint(Endpoint),
-    Empty,
-}
+mod specified;
 
-impl Default for Environment {
-    fn default() -> Self {
-        return Environment::Empty;
+/// Environment trait
+pub trait Environment: Display {
+    /// request should return a RequestBuilder with any environment specific configurations
+    /// already applied. It is expected that the implementation of environment already have
+    /// a client created with any environment level specifics applied as well.
+    fn request(&self) -> RequestBuilder;
+
+    /// Name should return a name for the client, the default implementation just returns
+    /// "default"
+    fn name(&self) -> String {
+        "default".into()
+    }
+
+    /// template_dir should return the location of the template directory, the default
+    /// implementation returns None
+    fn template_dir(&self) -> Option<&String> {
+        None
+    }
+
+    /// templates returns an Iterator over each template, the default
+    /// implementation returns an empty iterator
+    fn templates(&self) -> Result<Box<dyn Iterator<Item = String>>> {
+        Ok(Box::new(std::iter::empty()))
+    }
+
+    /// some environments may be configured to sign the request after it has
+    /// been created. This makes sure that can happen. If you think you
+    /// will sign or not call this function, since it just returns the provided
+    /// request with the default implementation.
+    fn sign(&self, req: Request) -> Result<Request> {
+        Ok(req)
     }
 }
 
-impl Display for Environment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Endpoint(endpoint) => endpoint.fmt(f),
-            Self::Empty => Ok(()),
-        }
-    }
-}
+// #[derive(Debug)]
+// pub enum Environment {
+//     Endpoint(Endpoint),
+//     Empty,
+// }
 
-impl Environment {
-    pub fn new(env: Option<&String>, config: &Config) -> Result<Environment> {
-        if let Some(env) = env {
-            Ok(Environment::Endpoint(Endpoint::new(env.clone(), config)?))
-        } else {
-            Ok(Environment::Empty)
-        }
-    }
+// impl Default for Environment {
+//     fn default() -> Self {
+//         return Environment::Empty;
+//     }
+// }
 
-    pub fn url_builder(&self) -> OptBaseURLBuilder {
-        match self {
-            Environment::Endpoint(endpoint) => OptBaseURLBuilder::from(endpoint.url_builder()),
-            Environment::Empty => OptBaseURLBuilder::empty(),
-        }
-    }
+// impl Display for Environment {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Self::Endpoint(endpoint) => endpoint.fmt(f),
+//             Self::Empty => Ok(()),
+//         }
+//     }
+// }
 
-    pub fn template_dir(&self) -> Option<&String> {
-        match self {
-            Environment::Endpoint(endpoint) => endpoint.template_dir(),
-            Environment::Empty => None,
-        }
-    }
+// impl Environment {
+//     pub fn new(env: Option<&String>, config: &Config) -> Result<Environment> {
+//         if let Some(env) = env {
+//             Ok(Environment::Endpoint(Endpoint::new(env.clone(), config)?))
+//         } else {
+//             Ok(Environment::Empty)
+//         }
+//     }
 
-    pub fn templates(&self) -> Result<Box<dyn Iterator<Item = String>>> {
-        match self {
-            Environment::Endpoint(endpoint) => endpoint.walk_templates(),
-            Environment::Empty => Ok(Box::new(std::iter::empty())),
-        }
-    }
+//     pub fn url_builder(&self) -> OptBaseURLBuilder {
+//         match self {
+//             Environment::Endpoint(endpoint) => OptBaseURLBuilder::from(endpoint.url_builder()),
+//             Environment::Empty => OptBaseURLBuilder::empty(),
+//         }
+//     }
 
-    pub fn name(&self) -> Option<&String> {
-        match self {
-            Environment::Endpoint(endpoint) => Some(&endpoint.name),
-            Environment::Empty => None,
-        }
-    }
-}
+//     pub fn template_dir(&self) -> Option<&String> {
+//         match self {
+//             Environment::Endpoint(endpoint) => endpoint.template_dir(),
+//             Environment::Empty => None,
+//         }
+//     }
 
-#[derive(Deserialize, Debug)]
-pub struct Endpoint {
-    #[serde(skip)]
-    pub name: String,
+//     pub fn templates(&self) -> Result<Box<dyn Iterator<Item = String>>> {
+//         match self {
+//             Environment::Endpoint(endpoint) => endpoint.walk_templates(),
+//             Environment::Empty => Ok(Box::new(std::iter::empty())),
+//         }
+//     }
 
-    #[serde(rename = "url")]
-    prefix: String,
-
-    #[serde(rename = "short_description")]
-    short_description: Option<String>,
-
-    #[serde(rename = "long_description")]
-    long_description: Option<String>,
-
-    #[serde(rename = "template_dir")]
-    template_dir: Option<String>,
-
-    #[serde(rename = "sigv4")]
-    sigv4: Option<bool>,
-    #[serde(rename = "sigv4_aws_profile")]
-    sigv4_aws_profile: Option<String>,
-    #[serde(rename = "sigv4_aws_service")]
-    sigv4_aws_service: Option<String>,
-}
+//     pub fn name(&self) -> Option<&String> {
+//         match self {
+//             Environment::Endpoint(endpoint) => Some(&endpoint.name),
+//             Environment::Empty => None,
+//         }
+//     }
+// }
 
 impl Endpoint {
-    pub fn new<S>(env: S, config: &Config) -> Result<Endpoint>
+    /// new creates a new environment with the clientBuilder specified. The environment
+    /// will add any additional settings specified in the environment to the client
+    /// before building and storing it.
+    pub fn new<S>(env: S, config: &Config, client: ClientBuilder) -> Result<Endpoint>
     where
         S: Into<String>,
     {

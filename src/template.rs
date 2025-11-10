@@ -18,8 +18,6 @@ use crate::{
 pub struct TemplateBuilder {
     /// config specifies the configCommand for this template.
     config: Option<ConfigCommand>,
-    /// Optional
-    client: Option<Client>,
     /// Optional context that serves as the base context we will render out of
     /// arguments.
     context: Option<Context>,
@@ -53,15 +51,6 @@ impl TemplateBuilder {
         Ok(self)
     }
 
-    /// client sets the client for the request. Any settings the client may have
-    /// set _could_ be overloaded by the template itself if specified. To ensure your
-    /// settings are utilized grab a mutable reference to the client from the Template
-    /// instead and apply your settings to that. Consider anything you place here as
-    /// "default" settings.
-    pub fn client(mut self, c: Client) -> Self {
-        self.client = Some(c);
-        self
-    }
     /// context sets the context we will build upon. This is not required, and we will
     /// call Context::default() when not provided. The context is often derived through
     /// `[[arg]]` via the template. So anything provided here is just additional sugar.
@@ -82,16 +71,10 @@ impl TemplateBuilder {
 
     /// build the template
     pub fn build(self) -> Result<Template> {
-        let Self {
-            config,
-            client,
-            context,
-        } = self;
+        let Self { config, context } = self;
 
         let config =
             config.ok_or_else(|| anyhow::Error::msg("config is required to create a template!"))?;
-        let client =
-            client.ok_or_else(|| anyhow::Error::msg("client is required to create a template!"))?;
         let mut tmpl = Tera::default();
         tmpl.add_raw_templates(config.templates()?)
             .context("invalid template")?;
@@ -99,7 +82,6 @@ impl TemplateBuilder {
         let context = context.unwrap_or_else(|| Context::default());
 
         Ok(Template {
-            client,
             tmpl,
             context,
             config,
@@ -111,7 +93,6 @@ impl TemplateBuilder {
 /// Template is a runnable template which takes an environment and a set of arguments
 /// to run
 pub struct Template {
-    client: Client,
     tmpl: Tera,
     context: Context,
     config: ConfigCommand,

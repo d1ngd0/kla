@@ -90,7 +90,7 @@ impl Display for SignedHeaders {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct SigV4Builder {
+pub struct SigV4 {
     /// headers are the headers we want to sign
     headers: SignedHeaders,
     /// The date for the signature, if left unset it will default to
@@ -104,10 +104,33 @@ pub struct SigV4Builder {
     credentials: Option<Credentials>,
 }
 
-impl SigV4Builder {
-    /// New Creates a new empty builder
-    pub fn new() -> Self {
-        Self::default()
+impl SigV4 {
+    pub async fn new(profile: Option<&String>, service: Option<&String>) -> crate::Result<SigV4> {
+        let config = aws_config::ConfigLoader::default()
+            .behavior_version(BehaviorVersion::latest())
+            .with_some(profile, aws_config::ConfigLoader::profile_name)
+            .load()
+            .await;
+
+        let credentials = config
+            .credentials_provider()
+            .ok_or(anyhow::Error::msg("AWS credentials not found"))?
+            .provide_credentials()
+            .await
+            .context("could not fetch credentials")?;
+
+        let signer = Self::default()
+            .date(SystemTime::now())
+            .region(config.region().map(|r| r.to_string()).unwrap_or_default())
+            .service(
+                service
+                    .map(|s| s.as_str())
+                    .unwrap_or("execute-api")
+                    .to_string(),
+            )
+            .credentials(credentials);
+
+        Ok(signer)
     }
 
     /// header adds a new header to include when signing the request
@@ -140,7 +163,7 @@ impl SigV4Builder {
         self
     }
 
-    pub fn sign(self, req: Request) -> Result<Request, SigningError> {
+    pub fn sign(&self, req: Request) -> Result<Request, SigningError> {
         let Self {
             headers,
             date,
@@ -240,51 +263,6 @@ impl SigV4Builder {
                 .query_pairs_mut()
                 .append_pair(param.0, param.1.as_ref());
         }
-
-        Ok(req)
-    }
-}
-
-// enable http reqwests to be signed
-pub trait Sigv4Request {
-    fn sign_request(
-        self,
-        profile: Option<&String>,
-        service: Option<&String>,
-    ) -> impl std::future::Future<Output = Result<Request, anyhow::Error>> + Send;
-}
-
-impl Sigv4Request for Request {
-    async fn sign_request(
-        self,
-        profile: Option<&String>,
-        service: Option<&String>,
-    ) -> Result<Request, anyhow::Error> {
-        let config = aws_config::ConfigLoader::default()
-            .behavior_version(BehaviorVersion::latest())
-            .with_some(profile, aws_config::ConfigLoader::profile_name)
-            .load()
-            .await;
-
-        let credentials = config
-            .credentials_provider()
-            .ok_or(anyhow::Error::msg("AWS credentials not found"))?
-            .provide_credentials()
-            .await
-            .context("could not fetch credentials")?;
-
-        let req = SigV4Builder::new()
-            .date(SystemTime::now())
-            .region(config.region().map(|r| r.to_string()).unwrap_or_default())
-            .service(
-                service
-                    .map(|s| s.as_str())
-                    .unwrap_or("execute-api")
-                    .to_string(),
-            )
-            .credentials(credentials)
-            .sign(self)
-            .context("Could not sign request")?;
 
         Ok(req)
     }

@@ -123,6 +123,15 @@ impl OptBaseURLBuilder {
     pub fn new<S: Into<AssumingURLBuilder>>(prefix: S) -> Self {
         Self::Base(prefix.into())
     }
+
+    /// some_new creates a new OptBaseURLBuilder with a base of Some(val)
+    /// and empty when None
+    pub fn some_new<S: Into<AssumingURLBuilder>>(prefix: Option<S>) -> Self {
+        match prefix {
+            Some(base) => OptBaseURLBuilder::Base(base.into()),
+            None => OptBaseURLBuilder::Empty,
+        }
+    }
 }
 
 impl URLBuilder for OptBaseURLBuilder {
