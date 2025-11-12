@@ -1,6 +1,8 @@
 use std::convert::From;
 use std::error::Error as StdError;
 
+use crate::sigv4::SigningError;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub(crate) type BoxError = Box<dyn StdError + Send + Sync>;
@@ -27,6 +29,8 @@ pub enum Error {
     KlaError(String),
     #[error("{0}")]
     Error(#[from] anyhow::Error),
+    #[error("{0}")]
+    SigningError(#[from] SigningError),
 }
 
 impl From<&str> for Error {

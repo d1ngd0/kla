@@ -174,14 +174,14 @@ impl SigV4 {
         let mut req = req;
 
         // unwrap things we need or throw errors
-        let credentials = credentials.ok_or(SigningError::from(
+        let credentials = credentials.clone().ok_or(SigningError::from(
             "aws credentials are required when creating sigv4 request",
         ))?;
         let date = date.unwrap_or(SystemTime::now().into());
-        let region = region.ok_or(SigningError::from(
+        let region = region.as_ref().ok_or(SigningError::from(
             "region is required when creating a sigv4 request",
         ))?;
-        let service = service.ok_or(SigningError::from(
+        let service = service.as_ref().ok_or(SigningError::from(
             "service is required when creating a sigv4 request",
         ))?;
 

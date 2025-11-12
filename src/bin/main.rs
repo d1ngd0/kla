@@ -7,7 +7,7 @@ use http::Method;
 use kla::{
     clap::DefaultValueIfSome,
     config::{ConfigCommand, MergeChildren},
-    Endpoint, Environment, Expand, FromEnvironment, KlaClientBuilder, KlaRequestBuilder,
+    Endpoint, Environment, EnvironmentSource, Expand, KlaClientBuilder, KlaRequestBuilder,
     OutputBuilder, Sigv4Request, TemplateBuilder, URLBuilder, When, WithEnvironment,
 };
 use log::error;

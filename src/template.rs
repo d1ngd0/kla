@@ -1,13 +1,13 @@
 use anyhow::Context as _;
 use clap::ArgMatches;
 use http::Method;
-use reqwest::{Client, RequestBuilder, Response};
+use reqwest::{RequestBuilder, Response};
 use tera::{Context, Tera};
 
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
-    Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, OutputBuilder, Result,
-    Sigv4Request, URLBuilder, When, WithEnvironment,
+    Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, OutputBuilder, Result, URLBuilder,
+    When, WithEnvironment,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -99,7 +99,10 @@ pub struct Template {
 }
 
 impl Template {
-    pub async fn run(&self, env: &Environment, args: &ArgMatches) -> Result<()> {
+    pub async fn run<E>(&self, env: &E, args: &ArgMatches) -> Result<()>
+    where
+        E: Environment,
+    {
         let verbose = args
             .get_one::<bool>("verbose")
             .map(|v| *v)
@@ -119,24 +122,19 @@ impl Template {
         // Environnment and Template should be hidden behind a single implementation
         // see `with_environment` trait, do the same for template
         // Only arg level should be specified here.
-        let request = self
-            .client
+        let request = env
             .request(
-                Method::try_from(
-                    self.tmpl
-                        .render("method", &context)
-                        .with_context(|| format!("could not render method template"))?
-                        .to_uppercase()
-                        .as_str(),
-                )?,
-                env.url_builder().build(
-                    &self
-                        .tmpl
-                        .render("uri", &context)
-                        .with_context(|| format!("could not render uri template"))?,
-                )?,
-            )
-            .with_environment(&env)
+                self.tmpl
+                    .render("method", &context)
+                    .with_context(|| format!("could not render method template"))?
+                    .to_uppercase()
+                    .as_str(),
+                &self
+                    .tmpl
+                    .render("uri", &context)
+                    .with_context(|| format!("could not render uri template"))?,
+            )?
+            .with_environment(env)
             .await?
             .with_some(
                 self.tmpl

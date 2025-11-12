@@ -1,13 +1,15 @@
-use std::time::SystemTime;
+use std::{
+    borrow::Cow,
+    fmt::{Display, Write},
+};
 
-use anyhow::Context;
-use aws_config::BehaviorVersion;
-use aws_credential_types::provider::ProvideCredentials;
 use config::{Config, ConfigError};
-use reqwest::{Client, ClientBuilder};
+use http::Method;
+use reqwest::{Client, ClientBuilder, IntoUrl};
 use serde::Deserialize;
+use skim::SkimItem;
 
-use crate::{AssumingURLBuilder, Opt, OptBaseURLBuilder, Result, SigV4};
+use crate::{Environment, OptBaseURLBuilder, Result, SigV4};
 
 #[derive(Deserialize, Debug)]
 /// Endpoint is a configured environment that specifies a prefix, name, template_dir
@@ -59,6 +61,9 @@ impl TryFrom<Config> for Endpoint {
 
 /// Specified is an environment type which is specified through the config, it
 pub struct Specified {
+    name: String,
+    short: String,
+    long: String,
     client: Client,
     url_builder: OptBaseURLBuilder,
     tmpl_dir: Option<String>,
@@ -82,7 +87,7 @@ impl Specified {
         C: TryInto<Endpoint, Error = E>,
         F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
-        let config: Endpoint = config.try_into().map_err(E::into)?;
+        let mut config: Endpoint = config.try_into().map_err(E::into)?;
         // Add Client level specifications here
         let b = ClientBuilder::new();
         let b = overrides(b)?;
@@ -98,18 +103,108 @@ impl Specified {
             )
         }
 
-        // TODO: you were here, this doesn't work
-        config.prefix.map(|v| if !endpoint.prefix.ends_with("/") {
-            endpoint.prefix.push_str("/");
+        // clean up the endpoint
+        config.prefix = config.prefix.map(|mut v| {
+            if !v.ends_with("/") {
+                v.push_str("/");
+            }
+            v
         });
 
+        let short = Self::build_short(&config);
+        let long = Self::build_long(&config);
+
         Ok(Self {
+            name: config.name,
+            short,
+            long,
             client: b.build()?,
             url_builder: OptBaseURLBuilder::some_new(config.prefix),
             tmpl_dir: config.template_dir,
             aws_sigv4,
         })
     }
+
+    /// build_short builds the short description for display
+    fn build_short(config: &Endpoint) -> String {
+        let mut short = String::new();
+        write!(&mut short, "{}:", config.name);
+
+        if let Some(prefix) = config.prefix.as_ref() {
+            write!(&mut short, "[{}]", prefix);
+        }
+
+        write!(&mut short, "\n");
+
+        if let Some(short_description) = config.short_description.as_ref() {
+            write!(&mut short, "\t{}\n", short_description);
+        }
+
+        short
+    }
+
+    /// build_short builds the short description for display
+    fn build_long(config: &Endpoint) -> String {
+        let mut long = String::new();
+        write!(&mut long, "{}:", config.name);
+
+        if let Some(prefix) = config.prefix.as_ref() {
+            write!(&mut long, "[{}]\n", prefix);
+        }
+
+        write!(&mut long, "\n");
+
+        if let Some(long_description) = config.long_description.as_ref() {
+            write!(&mut long, "\n{}\n", long_description);
+        }
+
+        long
+    }
 }
 
-impl Environment for 
+impl Environment for Specified {
+    fn request<E, M, U>(&self, method: M, url: U) -> Result<reqwest::RequestBuilder>
+    where
+        E: Into<crate::Error>,
+        M: TryInto<Method, Error = E>,
+        U: IntoUrl,
+    {
+        let method = method.try_into().map_err(E::into)?;
+        let url = url.into_url()?;
+        let b = self.client.request(method, url);
+        Ok(b)
+    }
+
+    fn name(&self) -> &String {
+        &self.name
+    }
+
+    fn template_dir(&self) -> Option<&String> {
+        self.tmpl_dir.as_ref()
+    }
+
+    fn sign(&self, req: reqwest::Request) -> Result<reqwest::Request> {
+        if let Some(signer) = self.aws_sigv4.as_ref() {
+            Ok(signer.sign(req)?)
+        } else {
+            Ok(req)
+        }
+    }
+}
+
+impl Display for Specified {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.short)?;
+        Ok(())
+    }
+}
+
+impl SkimItem for Specified {
+    fn text(&self) -> Cow<'_, str> {
+        Cow::from(self.name())
+    }
+
+    fn preview(&self, _context: skim::PreviewContext) -> skim::ItemPreview {
+        skim::ItemPreview::Text(self.long.clone())
+    }
+}
