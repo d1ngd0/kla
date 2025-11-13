@@ -3,12 +3,11 @@ use std::{ffi::OsString, fs, path::Path, sync::Arc};
 use anyhow::Context as _;
 use clap::{arg, command, ArgAction, ArgMatches, Command};
 use config::{Config, File, FileFormat};
-use http::Method;
 use kla::{
     clap::DefaultValueIfSome,
     config::{ConfigCommand, MergeChildren},
     Endpoint, Environment, Expand, KlaClientBuilder, KlaRequestBuilder, Optional, OutputBuilder,
-    Sigv4Request, TemplateBuilder, URLBuilder, When, WithEnvironment,
+    Sigv4Request, TemplateBuilder, When, WithEnvironment,
 };
 use log::error;
 use regex::Regex;
@@ -72,69 +71,72 @@ fn command() -> Command {
         )
 }
 
-fn args_client(args: &ArgMatches) -> Result<ClientBuilder, anyhow::Error> {
-    let client_builder = ClientBuilder::new()
-        .opt_header_agent(args.get_one("agent"))
-        .with_context(|| format!("could not add agent: {:?}", args.get_one::<String>("agent")))?
-        .gzip(
-            !args
-                .get_one::<bool>("no-gzip")
-                .map(|v| *v)
-                .unwrap_or_default(),
-        )
-        .brotli(
-            !args
-                .get_one::<bool>("no-brotli")
-                .map(|v| *v)
-                .unwrap_or_default(),
-        )
-        .deflate(
-            !args
-                .get_one::<bool>("no-deflate")
-                .map(|v| *v)
-                .unwrap_or_default(),
-        )
-        .connection_verbose(
-            args.get_one::<bool>("verbose")
-                .map(|v| *v)
-                .unwrap_or_default(),
-        )
-        .opt_max_redirects(args.get_one("max-redirects"))
-        .no_redirects(
-            args.get_one::<bool>("no-redirects")
-                .map(|v| *v)
-                .unwrap_or_default(),
-        )
-        .opt_proxy(args.get_one("proxy"), args.get_one("proxy-auth"))
-        .with_context(|| {
-            format!(
-                "could not add proxy: --proxy={:?} --proxy-auth={:?}",
-                args.get_one::<String>("proxy"),
-                args.get_one::<String>("proxy-auth")
-                    .map(|v| "*".repeat(v.len()))
+fn args_client(
+    args: &ArgMatches,
+) -> impl Fn(ClientBuilder) -> kla::Result<ClientBuilder> + use<'_> {
+    |builder| {
+        Ok(builder
+            .opt_header_agent(args.get_one("agent"))
+            .with_context(|| format!("could not add agent: {:?}", args.get_one::<String>("agent")))?
+            .gzip(
+                !args
+                    .get_one::<bool>("no-gzip")
+                    .map(|v| *v)
+                    .unwrap_or_default(),
             )
-        })?
-        .opt_proxy_http(args.get_one("proxy-http"), args.get_one("proxy-auth"))
-        .with_context(|| {
-            format!(
-                "could not add proxy: --proxy-http={:?} --proxy-auth={:?}",
-                args.get_one::<String>("proxy-http"),
-                args.get_one::<String>("proxy-auth")
-                    .map(|v| "*".repeat(v.len()))
+            .brotli(
+                !args
+                    .get_one::<bool>("no-brotli")
+                    .map(|v| *v)
+                    .unwrap_or_default(),
             )
-        })?
-        .opt_proxy_https(args.get_one("proxy-https"), args.get_one("proxy-auth"))
-        .with_context(|| {
-            format!(
-                "could not add proxy: --proxy-https={:?} --proxy-auth={:?}",
-                args.get_one::<String>("proxy-https"),
-                args.get_one::<String>("proxy-auth")
-                    .map(|v| "*".repeat(v.len()))
+            .deflate(
+                !args
+                    .get_one::<bool>("no-deflate")
+                    .map(|v| *v)
+                    .unwrap_or_default(),
             )
-        })?
-        .opt_certificate(args.get_many("certificate"))
-        .with_context(|| format!("could not add certificate"))?;
-    Ok(client_builder)
+            .connection_verbose(
+                args.get_one::<bool>("verbose")
+                    .map(|v| *v)
+                    .unwrap_or_default(),
+            )
+            .opt_max_redirects(args.get_one("max-redirects"))
+            .no_redirects(
+                args.get_one::<bool>("no-redirects")
+                    .map(|v| *v)
+                    .unwrap_or_default(),
+            )
+            .opt_proxy(args.get_one("proxy"), args.get_one("proxy-auth"))
+            .with_context(|| {
+                format!(
+                    "could not add proxy: --proxy={:?} --proxy-auth={:?}",
+                    args.get_one::<String>("proxy"),
+                    args.get_one::<String>("proxy-auth")
+                        .map(|v| "*".repeat(v.len()))
+                )
+            })?
+            .opt_proxy_http(args.get_one("proxy-http"), args.get_one("proxy-auth"))
+            .with_context(|| {
+                format!(
+                    "could not add proxy: --proxy-http={:?} --proxy-auth={:?}",
+                    args.get_one::<String>("proxy-http"),
+                    args.get_one::<String>("proxy-auth")
+                        .map(|v| "*".repeat(v.len()))
+                )
+            })?
+            .opt_proxy_https(args.get_one("proxy-https"), args.get_one("proxy-auth"))
+            .with_context(|| {
+                format!(
+                    "could not add proxy: --proxy-https={:?} --proxy-auth={:?}",
+                    args.get_one::<String>("proxy-https"),
+                    args.get_one::<String>("proxy-auth")
+                        .map(|v| "*".repeat(v.len()))
+                )
+            })?
+            .opt_certificate(args.get_many("certificate"))
+            .with_context(|| format!("could not add certificate"))?)
+    }
 }
 
 #[tokio::main]
@@ -220,36 +222,33 @@ async fn run_run<S: Into<String>>(
 ) -> Result<(), anyhow::Error> {
     // Get the name of the template
     let template: String = match template.map(|s| s.into()) {
-        None => return run_run_empty(args, conf),
-        Some(template) if template == "help" => return run_run_empty(args, conf),
-        Some(template) if template == "--help" => return run_run_empty(args, conf),
+        None => return run_run_empty(args, conf).await,
+        Some(template) if template == "help" => return run_run_empty(args, conf).await,
+        Some(template) if template == "--help" => return run_run_empty(args, conf).await,
         Some(template) => template,
     };
 
     // Get the environment
-    // TODO: you were here, you were going to make this into a function on option
-    // to build the optional environment from these arguments
-    let env = Optional::from_config(args.get_one("env"), conf).with_context(|| {
-        format!(
-            "could not load environment: {:?}",
-            args.get_one::<String>("env")
-        )
-    })?;
+    let env =
+        Optional::from_config_with_priority(args.get_one::<String>("env"), conf, args_client(args))
+            .await
+            .with_context(|| {
+                format!(
+                    "could not load environment: {:?}",
+                    args.get_one::<String>("env")
+                )
+            })?;
 
     // Get the configuration for the template in the environment
     let tmpl_config = match Config::builder()
-        .add_source_environment(&env, &template)
-        .with_context(|| {
-            format!(
-                "could not load {} for environment {:?}",
-                &template,
-                env.name(),
-            )
-        })?
+        .add_source(File::new(
+            env.tmpl_path(&template)?.as_path().to_str().unwrap(),
+            FileFormat::Toml,
+        ))
         .build()
     {
         Ok(tmpl_config) => ConfigCommand::with_name(&template, tmpl_config)?,
-        Err(_) => return run_run_empty(args, conf),
+        Err(_) => return run_run_empty(args, conf).await,
     };
 
     // Run the command parsing for the template again, this will make actually
@@ -265,7 +264,6 @@ async fn run_run<S: Into<String>>(
         .get_matches();
 
     TemplateBuilder::new()
-        .client(args_client(&m)?.with_environment(&env).await?.build()?)
         // TODO: This should be changed to try_config, and we shouldn't turn it into
         // a ConfigCommand here, all that should be done inside the builder
         // We will need to get the name in the config somehow
@@ -284,19 +282,23 @@ async fn run_run<S: Into<String>>(
     Ok(())
 }
 
-fn run_run_empty(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
-    let env = Environment::new(args.get_one("env"), conf).with_context(|| {
-        format!(
-            "could not load environment: {:?}",
-            args.get_one::<String>("env")
-        )
-    })?;
+async fn run_run_empty(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    let env =
+        Optional::from_config_with_priority(args.get_one::<String>("env"), conf, args_client(args))
+            .await
+            .with_context(|| {
+                format!(
+                    "could not load environment: {:?}",
+                    args.get_one::<String>("env")
+                )
+            })?;
 
     let mut m = Command::new("run")
         .about("run templates defined for the environment")
         .long_about(RUN_ABOUT)
         .alias("template")
         .arg_required_else_help(true);
+
     let templates = env.templates().with_context(|| {
         format!(
             "could not fetch all templates for {:?} from {:?}",
@@ -307,8 +309,11 @@ fn run_run_empty(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> 
 
     for template in templates {
         let tmpl_conf = Config::builder()
-            .add_source_environment(&env, &template)
-            .and_then(|b| Ok(b.build()?))
+        .add_source(File::new(
+            env.tmpl_path(&template)?.as_path().to_str().unwrap(),
+            FileFormat::Toml,
+        ))
+            .build().map_err(kla::Error::from)
             .and_then(|conf| ConfigCommand::with_name(&template, conf))
             .with_context(|| format!("environment {:?} with tempalte {} could not be rendered as command, is something wrong with the template?", env.name(), &template))?;
         m = m.subcommand(Command::try_from(tmpl_conf)?);
@@ -328,16 +333,18 @@ fn run_environments(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Erro
     })?;
 
     let environments = conf
-        .get_table("environment")
+        .get_array("environment")
         .with_context(|| format!("Could not load environments from config"))?
         .into_iter()
-        .filter_map(|(k, v)| if r.is_match(&k) { Some((k, v)) } else { None });
+        .map(|val| Endpoint::try_from(val))
+        .filter(|v| match v.as_ref() {
+            Ok(env) => r.is_match(&env.name),
+            Err(_) => true,
+        });
 
-    for (k, v) in environments {
-        let env: Endpoint = v
-            .try_deserialize()
-            .with_context(|| format!("invalid endpoint {}", k))?;
-        println!("{}", env);
+    for endpoint in environments {
+        let endpoint = endpoint.with_context(|| format!("invalid endpoint"))?;
+        println!("{}", endpoint);
     }
 
     Ok(())
@@ -353,17 +360,18 @@ fn run_switch(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     })?;
 
     let environments = conf
-        .get_table("environment")
+        .get_array("environment")
         .with_context(|| format!("Could not load environments from config"))?
         .into_iter()
-        .filter_map(|(k, v)| if r.is_match(&k) { Some((k, v)) } else { None });
+        .map(|val| Endpoint::try_from(val))
+        .filter(|v| match v.as_ref() {
+            Ok(env) => r.is_match(&env.name),
+            Err(_) => true,
+        });
 
     let mut num_entries = 0;
-    for (name, val) in environments {
-        let mut endpoint: Endpoint = val
-            .try_deserialize()
-            .with_context(|| format!("invalid endpoint {}", name))?;
-        endpoint.name = name;
+    for endpoint in environments {
+        let endpoint = endpoint.with_context(|| format!("invalid endpoint"))?;
         let endpoint: Arc<dyn SkimItem> = Arc::new(endpoint);
         send.send(endpoint).unwrap();
 
@@ -416,12 +424,15 @@ fn run_switch(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
 
 // run_root will run the command with no arguments
 async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
-    let env = Environment::new(args.get_one("env"), conf).with_context(|| {
-        format!(
-            "could not load environment: {:?}",
-            args.get_one::<String>("env")
-        )
-    })?;
+    let env =
+        Optional::from_config_with_priority(args.get_one::<String>("env"), conf, args_client(args))
+            .await
+            .with_context(|| {
+                format!(
+                    "could not load environment: {:?}",
+                    args.get_one::<String>("env")
+                )
+            })?;
 
     let verbose = args
         .get_one::<bool>("verbose")
@@ -431,31 +442,19 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     let (uri, method) = if let Some(uri) = args.get_one::<String>("url") {
         (
             uri,
-            Method::try_from(
-                args.get_one::<String>("method-or-url")
-                    .expect("required")
-                    .to_uppercase()
-                    .as_str(),
-            )
-            .with_context(|| {
-                format!(
-                    "{:?} is not a valid method",
-                    args.get_one::<String>("method-or-url")
-                )
-            })?,
+            args.get_one::<String>("method-or-url")
+                .expect("required")
+                .to_uppercase(),
         )
     } else {
         (
             args.get_one("method-or-url").expect("required"),
-            Method::GET,
+            "GET".into(),
         )
     };
 
-    let url = env.url_builder().build(uri)?;
-    let client = args_client(args)?.with_environment(&env).await?.build()?;
-
-    let request = client
-        .request(method, url)
+    let request = env
+        .request(method.as_str(), uri)?
         .with_environment(&env)
         .await?
         .opt_body(args.get_one("body"))
@@ -517,7 +516,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
 
     let response = match args.get_one("dry").map(|b| *b).unwrap_or_default() {
         true => Response::from(http::Response::<Vec<u8>>::default()),
-        false => client
+        false => env
             .execute(request)
             .await
             .with_context(|| format!("request failed!"))?,

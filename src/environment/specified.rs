@@ -17,7 +17,7 @@ use crate::{Environment, OptBaseURLBuilder, Result, SigV4, URLBuilder};
 pub struct Endpoint {
     #[serde(rename = "name")]
     /// The name of the environment, used when selecting etc.
-    name: String,
+    pub name: String,
 
     #[serde(rename = "url")]
     /// The prefix of the environment is prepended to the user supplied
@@ -54,15 +54,38 @@ impl Display for Endpoint {
         write!(f, "{}:", self.name)?;
 
         if let Some(prefix) = self.prefix.as_ref() {
-            write!(f, "[{}]\n", prefix)?;
+            write!(f, "[{}]", prefix)?;
         }
 
         write!(f, "\n")?;
 
-        if let Some(long_description) = self.long_description.as_ref() {
-            write!(f, "\n{}\n", long_description)?;
+        if let Some(short_description) = self.short_description.as_ref() {
+            write!(f, "\t{}\n", short_description)?;
         }
+
         Ok(())
+    }
+}
+
+impl SkimItem for Endpoint {
+    fn text(&self) -> Cow<'_, str> {
+        Cow::from(&self.name)
+    }
+
+    fn preview(&self, _context: skim::PreviewContext) -> skim::ItemPreview {
+        let mut f = String::new();
+        write!(f, "{}:", self.name).unwrap();
+
+        if let Some(prefix) = self.prefix.as_ref() {
+            write!(f, "[{}]\n", prefix).unwrap();
+        }
+
+        write!(f, "\n").unwrap();
+
+        if let Some(long_description) = self.long_description.as_ref() {
+            write!(f, "\n{}\n", long_description).unwrap();
+        }
+        skim::ItemPreview::Text(f)
     }
 }
 
@@ -89,8 +112,6 @@ impl TryFrom<Value> for Endpoint {
 /// Specified is an environment type which is specified through the config, it
 pub struct Specified {
     name: String,
-    short: String,
-    long: String,
     client: Client,
     url_builder: OptBaseURLBuilder,
     tmpl_dir: Option<String>,
@@ -140,36 +161,13 @@ impl Specified {
             v
         });
 
-        let short = Self::build_short(&config);
-        let long = format!("{}", &config);
-
         Ok(Self {
             name: config.name,
-            short,
-            long,
             client: b.build()?,
             url_builder: OptBaseURLBuilder::some_new(config.prefix),
             tmpl_dir: config.template_dir,
             aws_sigv4,
         })
-    }
-
-    /// build_short builds the short description for display
-    fn build_short(config: &Endpoint) -> String {
-        let mut short = String::new();
-        write!(&mut short, "{}:", config.name);
-
-        if let Some(prefix) = config.prefix.as_ref() {
-            write!(&mut short, "[{}]", prefix);
-        }
-
-        write!(&mut short, "\n");
-
-        if let Some(short_description) = config.short_description.as_ref() {
-            write!(&mut short, "\t{}\n", short_description);
-        }
-
-        short
     }
 }
 
@@ -207,22 +205,5 @@ impl Environment for Specified {
             .execute(request)
             .await
             .map_err(reqwest::Error::into)
-    }
-}
-
-impl Display for Specified {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.long)?;
-        Ok(())
-    }
-}
-
-impl SkimItem for Specified {
-    fn text(&self) -> Cow<'_, str> {
-        Cow::from(self.name())
-    }
-
-    fn preview(&self, _context: skim::PreviewContext) -> skim::ItemPreview {
-        skim::ItemPreview::Text(self.long.clone())
     }
 }

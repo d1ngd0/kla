@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::{ffi::OsString, fmt::Display, path::PathBuf};
+use std::{ffi::OsString, path::PathBuf};
 
 use std::fs::{self, DirEntry};
 
@@ -19,7 +19,7 @@ mod with;
 pub use with::*;
 
 /// Environment trait
-pub trait Environment: Display + Send + Sync {
+pub trait Environment: Send + Sync {
     /// request should return a RequestBuilder with any environment specific configurations
     /// already applied. It is expected that the implementation of environment already have
     /// a client created with any environment level specifics applied as well.

@@ -1,13 +1,12 @@
 use anyhow::Context as _;
 use clap::ArgMatches;
-use http::Method;
 use reqwest::{RequestBuilder, Response};
 use tera::{Context, Tera};
 
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
     Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, OutputBuilder, Result,
-    Sigv4Request, URLBuilder, When, WithEnvironment,
+    Sigv4Request, When, WithEnvironment,
 };
 
 #[derive(Clone, Debug, Default)]

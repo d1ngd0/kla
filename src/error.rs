@@ -1,4 +1,4 @@
-use std::convert::From;
+use std::convert::{From, Infallible};
 use std::error::Error as StdError;
 
 use crate::sigv4::SigningError;
@@ -31,6 +31,8 @@ pub enum Error {
     Error(#[from] anyhow::Error),
     #[error("{0}")]
     SigningError(#[from] SigningError),
+    #[error("aint never gonna happen")]
+    Infallable(#[from] Infallible),
 }
 
 impl From<&str> for Error {

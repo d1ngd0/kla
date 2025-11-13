@@ -1,14 +1,12 @@
-use std::fmt::Display;
-
 use anyhow::Context;
-use config::Config;
+use config::{Config, Value};
 use reqwest::ClientBuilder;
 
 use super::Environment;
 
 use crate::environment::specified::Endpoint;
 use crate::environment::{specified::Specified, unspecified::Unspecified};
-use crate::Result;
+use crate::{Error, Result};
 
 /// Optional allows you to either specify, or not specify the environment up front.
 /// When specified the specified environment underneath is called, when left unspecified
@@ -53,21 +51,61 @@ impl Optional {
         Ok(env)
     }
 
-    pub async fn from_config<S, F>(name: Option<S>, config: Config, overrides: F) -> Result<Self>
+    /// from_config is passed a path to the environment, and the full configuration
+    /// where it will go searching for it and return the associated environment or an error
+    pub async fn from_config<S>(name: Option<S>, config: &Config) -> Result<Self>
+    where
+        S: AsRef<str>,
+    {
+        let env = match name {
+            Some(name) => {
+                let endpoint = config.get::<Value>(name.as_ref()).with_context(|| {
+                    format!("environment {} was invalid or not found!", name.as_ref())
+                })?;
+                Optional::Specified(Specified::new(endpoint).await?)
+            }
+            None => Optional::Unspecified(Unspecified::new()),
+        };
+
+        Ok(env)
+    }
+
+    /// from_config is passed a path to the environment, and the full configuration
+    /// where it will go searching for it and return the associated environment or an error
+    /// the function also allows specifying overrides
+    pub async fn from_config_with_priority<S, F>(
+        name: Option<S>,
+        config: &Config,
+        overrides: F,
+    ) -> Result<Self>
     where
         S: AsRef<str>,
         F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
         let env = match name {
-            Some(name) => Optional::Specified(
-                Specified::new_with_priority(
-                    config.(name.as_ref()).with_context(|| {
-                        format!("environment {} was invalid or not found!", name.as_ref())
-                    })?,
-                    overrides,
-                )
-                .await?,
-            ),
+            Some(name) => {
+                let endpoint = config
+                    .get_array("environment")
+                    .with_context(|| "No environments configured")?
+                    .into_iter()
+                    .filter_map(|env| {
+                        let env: Endpoint = env.try_deserialize().ok()?;
+                        if env.name == name.as_ref() {
+                            Some(env)
+                        } else {
+                            None
+                        }
+                    })
+                    .next()
+                    .ok_or_else(|| {
+                        Error::from(format!(
+                            "environment {} was invalid or not found!",
+                            name.as_ref()
+                        ))
+                    })?;
+
+                Optional::Specified(Specified::new_with_priority(endpoint, overrides).await?)
+            }
             None => Optional::Unspecified(Unspecified::new_with_priority(overrides)?),
         };
 
@@ -137,14 +175,5 @@ impl Default for Optional {
     /// default returns an unspecified environment
     fn default() -> Self {
         Optional::Unspecified(Unspecified::default())
-    }
-}
-
-impl Display for Optional {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Optional::Specified(specified) => specified.fmt(f),
-            Optional::Unspecified(unspecified) => unspecified.fmt(f),
-        }
     }
 }
