@@ -3,13 +3,13 @@ use std::{
     fmt::{Display, Write},
 };
 
-use config::{Config, ConfigError};
+use config::{Config, ConfigError, Value};
 use http::Method;
 use reqwest::{Client, ClientBuilder, IntoUrl};
 use serde::Deserialize;
 use skim::SkimItem;
 
-use crate::{Environment, OptBaseURLBuilder, Result, SigV4};
+use crate::{Environment, OptBaseURLBuilder, Result, SigV4, URLBuilder};
 
 #[derive(Deserialize, Debug)]
 /// Endpoint is a configured environment that specifies a prefix, name, template_dir
@@ -49,12 +49,39 @@ pub struct Endpoint {
     sigv4_aws_service: Option<String>,
 }
 
+impl Display for Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:", self.name)?;
+
+        if let Some(prefix) = self.prefix.as_ref() {
+            write!(f, "[{}]\n", prefix)?;
+        }
+
+        write!(f, "\n")?;
+
+        if let Some(long_description) = self.long_description.as_ref() {
+            write!(f, "\n{}\n", long_description)?;
+        }
+        Ok(())
+    }
+}
+
 // Implement try from so we can pass a config directly into the Specified::new
 // constructor
 impl TryFrom<Config> for Endpoint {
     type Error = ConfigError;
 
     fn try_from(value: Config) -> std::result::Result<Self, Self::Error> {
+        value.try_deserialize()
+    }
+}
+
+// Implement try from so we can pass a config directly into the Specified::new
+// constructor
+impl TryFrom<Value> for Endpoint {
+    type Error = ConfigError;
+
+    fn try_from(value: Value) -> std::result::Result<Self, Self::Error> {
         value.try_deserialize()
     }
 }
@@ -81,6 +108,8 @@ impl Specified {
         Self::new_with_priority(config, |c| Ok(c)).await
     }
 
+    /// new_with_priority creates a new environment where you get a hook to modify the
+    /// clientbuilder and inject your own settings.
     pub async fn new_with_priority<E, C, F>(config: C, overrides: F) -> Result<Self>
     where
         E: Into<crate::Error>,
@@ -112,7 +141,7 @@ impl Specified {
         });
 
         let short = Self::build_short(&config);
-        let long = Self::build_long(&config);
+        let long = format!("{}", &config);
 
         Ok(Self {
             name: config.name,
@@ -142,24 +171,6 @@ impl Specified {
 
         short
     }
-
-    /// build_short builds the short description for display
-    fn build_long(config: &Endpoint) -> String {
-        let mut long = String::new();
-        write!(&mut long, "{}:", config.name);
-
-        if let Some(prefix) = config.prefix.as_ref() {
-            write!(&mut long, "[{}]\n", prefix);
-        }
-
-        write!(&mut long, "\n");
-
-        if let Some(long_description) = config.long_description.as_ref() {
-            write!(&mut long, "\n{}\n", long_description);
-        }
-
-        long
-    }
 }
 
 impl Environment for Specified {
@@ -170,7 +181,7 @@ impl Environment for Specified {
         U: IntoUrl,
     {
         let method = method.try_into().map_err(E::into)?;
-        let url = url.into_url()?;
+        let url = self.url_builder.build(url.as_str())?;
         let b = self.client.request(method, url);
         Ok(b)
     }
@@ -190,11 +201,18 @@ impl Environment for Specified {
             Ok(req)
         }
     }
+
+    async fn execute(&self, request: reqwest::Request) -> Result<reqwest::Response> {
+        self.client
+            .execute(request)
+            .await
+            .map_err(reqwest::Error::into)
+    }
 }
 
 impl Display for Specified {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.short)?;
+        write!(f, "{}", &self.long)?;
         Ok(())
     }
 }

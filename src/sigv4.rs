@@ -267,3 +267,26 @@ impl SigV4 {
         Ok(req)
     }
 }
+
+pub trait Sigv4Request {
+    fn sign_request(
+        self,
+        profile: Option<&String>,
+        service: Option<&String>,
+    ) -> impl std::future::Future<Output = Result<Request, anyhow::Error>> + Send;
+}
+
+impl Sigv4Request for Request {
+    async fn sign_request(
+        self,
+        profile: Option<&String>,
+        service: Option<&String>,
+    ) -> Result<Request, anyhow::Error> {
+        let req = SigV4::new(profile, service)
+            .await?
+            .sign(self)
+            .context("Could not sign request")?;
+
+        Ok(req)
+    }
+}

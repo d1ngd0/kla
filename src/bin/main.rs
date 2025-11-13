@@ -7,8 +7,8 @@ use http::Method;
 use kla::{
     clap::DefaultValueIfSome,
     config::{ConfigCommand, MergeChildren},
-    Endpoint, Environment, EnvironmentSource, Expand, KlaClientBuilder, KlaRequestBuilder,
-    OutputBuilder, Sigv4Request, TemplateBuilder, URLBuilder, When, WithEnvironment,
+    Endpoint, Environment, Expand, KlaClientBuilder, KlaRequestBuilder, Optional, OutputBuilder,
+    Sigv4Request, TemplateBuilder, URLBuilder, When, WithEnvironment,
 };
 use log::error;
 use regex::Regex;
@@ -227,7 +227,9 @@ async fn run_run<S: Into<String>>(
     };
 
     // Get the environment
-    let env = Environment::new(args.get_one("env"), conf).with_context(|| {
+    // TODO: you were here, you were going to make this into a function on option
+    // to build the optional environment from these arguments
+    let env = Optional::from_config(args.get_one("env"), conf).with_context(|| {
         format!(
             "could not load environment: {:?}",
             args.get_one::<String>("env")
@@ -332,10 +334,9 @@ fn run_environments(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Erro
         .filter_map(|(k, v)| if r.is_match(&k) { Some((k, v)) } else { None });
 
     for (k, v) in environments {
-        let mut env: Endpoint = v
+        let env: Endpoint = v
             .try_deserialize()
             .with_context(|| format!("invalid endpoint {}", k))?;
-        env.name = k;
         println!("{}", env);
     }
 

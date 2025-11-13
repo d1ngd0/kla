@@ -6,8 +6,8 @@ use tera::{Context, Tera};
 
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
-    Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, OutputBuilder, Result, URLBuilder,
-    When, WithEnvironment,
+    Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, OutputBuilder, Result,
+    Sigv4Request, URLBuilder, When, WithEnvironment,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -241,8 +241,7 @@ impl Template {
 
         let response = match args.get_one("dry").map(|b| *b).unwrap_or_default() {
             true => Response::from(http::Response::<Vec<u8>>::default()),
-            false => self
-                .client
+            false => env
                 .execute(request)
                 .await
                 .with_context(|| format!("request failed!"))?,

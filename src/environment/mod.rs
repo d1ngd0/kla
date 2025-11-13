@@ -1,13 +1,19 @@
+use std::future::Future;
 use std::{ffi::OsString, fmt::Display, path::PathBuf};
 
 use std::fs::{self, DirEntry};
 
 use http::Method;
-use reqwest::{IntoUrl, Request};
+use reqwest::{IntoUrl, Request, Response};
 
 use crate::{Error, Result};
 
+mod optional;
+pub use optional::*;
 mod specified;
+pub use specified::*;
+mod unspecified;
+pub use unspecified::*;
 
 mod with;
 pub use with::*;
@@ -22,6 +28,8 @@ pub trait Environment: Display + Send + Sync {
         E: Into<crate::Error>,
         M: TryInto<Method, Error = E>,
         U: IntoUrl;
+
+    fn execute(&self, request: Request) -> impl Future<Output = Result<Response>>;
 
     // name returns the name of the client
     fn name(&self) -> &String;
