@@ -1,6 +1,7 @@
+use std::{fs, path::Path};
+
 use anyhow::Context as _;
 use clap::{command, Arg, ArgAction, ArgMatches, Command};
-use config::Config;
 use inquire::Password;
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
@@ -85,13 +86,33 @@ impl FilterWhen for Vec<ConfigKV> {
 }
 
 impl ConfigCommand {
-    pub fn with_name<S: Into<String>, C: TryInto<Self, Error = crate::Error>>(
-        name: S,
-        conf: C,
-    ) -> std::result::Result<ConfigCommand, crate::Error> {
-        let mut cmd: Self = conf.try_into()?;
-        cmd.name = name.into();
-        Ok(cmd)
+    pub fn from_file<P>(path: P) -> std::result::Result<ConfigCommand, crate::Error>
+    where
+        P: AsRef<Path>,
+    {
+        let name = path
+            .as_ref()
+            .file_name()
+            .and_then(|filename| filename.to_str())
+            .and_then(|filename| filename.strip_suffix(".toml"))
+            .ok_or_else(|| {
+                crate::Error::from(format!(
+                    "could not get command name from path {:?}",
+                    path.as_ref()
+                ))
+            })?;
+        let content = fs::read_to_string(path.as_ref())?;
+        Self::with_name(name, content)
+    }
+
+    pub fn with_name<S, C>(name: S, conf: C) -> std::result::Result<ConfigCommand, crate::Error>
+    where
+        S: Into<String>,
+        C: AsRef<str>,
+    {
+        let mut conf: ConfigCommand = toml::from_str(conf.as_ref())?;
+        conf.name = name.into();
+        Ok(conf)
     }
 
     pub fn templates<'a>(&'a self) -> crate::Result<Vec<(String, &'a String)>> {
@@ -191,24 +212,6 @@ impl ConfigCommand {
         }
 
         Ok(ctx)
-    }
-}
-
-impl TryFrom<Config> for ConfigCommand {
-    type Error = crate::Error;
-
-    fn try_from(value: Config) -> Result<Self, Self::Error> {
-        let v = value.try_deserialize()?;
-        Ok(v)
-    }
-}
-
-impl TryFrom<&Config> for ConfigCommand {
-    type Error = crate::Error;
-
-    fn try_from(value: &Config) -> Result<Self, Self::Error> {
-        let v = value.clone().try_deserialize()?;
-        Ok(v)
     }
 }
 
@@ -375,16 +378,6 @@ where
 
     let av = ActionVisitor {};
     de.deserialize_str(av)
-}
-
-/// Implementation of turning a Config object into a ConfigArg
-impl TryFrom<Config> for ConfigArg {
-    type Error = crate::Error;
-
-    fn try_from(value: Config) -> Result<Self, Self::Error> {
-        let v = value.try_deserialize()?;
-        Ok(v)
-    }
 }
 
 /// Implementation of turining a ConfigArg into an Argument for

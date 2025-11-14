@@ -29,5 +29,6 @@ environment = ".default-environment"
 #   my_random_attribute = "something"
 # ```
 [[config]]
-dir = "conf.d/"
+type = "dir"
+path = "conf.d/"
 

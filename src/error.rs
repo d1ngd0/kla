@@ -12,8 +12,6 @@ pub enum Error {
     #[error("Error Parsing Data: {0}")]
     BodyParsingError(#[from] serde_json::Error),
     #[error("Configuration Error: {0}")]
-    ConfigError(#[from] config::ConfigError),
-    #[error("HTTP Error: {0}")]
     HTTPError(#[from] reqwest::Error),
     #[error("Templating Error: {0}")]
     TemplateError(#[from] tera::Error),
@@ -31,6 +29,8 @@ pub enum Error {
     Error(#[from] anyhow::Error),
     #[error("{0}")]
     SigningError(#[from] SigningError),
+    #[error("Toml Parse Error {0}")]
+    TomlError(#[from] toml::de::Error),
     #[error("aint never gonna happen")]
     Infallable(#[from] Infallible),
 }

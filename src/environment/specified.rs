@@ -3,7 +3,6 @@ use std::{
     fmt::{Display, Write},
 };
 
-use config::{Config, ConfigError, Value};
 use http::Method;
 use reqwest::{Client, ClientBuilder, IntoUrl};
 use serde::Deserialize;
@@ -11,7 +10,7 @@ use skim::SkimItem;
 
 use crate::{Environment, Expand, OptBaseURLBuilder, Result, SigV4, URLBuilder};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 /// Endpoint is a configured environment that specifies a prefix, name, template_dir
 /// etc. This struct is the configuration for the final environment that we build
 pub struct Endpoint {
@@ -89,26 +88,6 @@ impl SkimItem for Endpoint {
     }
 }
 
-// Implement try from so we can pass a config directly into the Specified::new
-// constructor
-impl TryFrom<Config> for Endpoint {
-    type Error = ConfigError;
-
-    fn try_from(value: Config) -> std::result::Result<Self, Self::Error> {
-        value.try_deserialize()
-    }
-}
-
-// Implement try from so we can pass a config directly into the Specified::new
-// constructor
-impl TryFrom<Value> for Endpoint {
-    type Error = ConfigError;
-
-    fn try_from(value: Value) -> std::result::Result<Self, Self::Error> {
-        value.try_deserialize()
-    }
-}
-
 /// Specified is an environment type which is specified through the config, it
 pub struct Specified {
     name: String,
@@ -121,23 +100,16 @@ pub struct Specified {
 impl Specified {
     /// Create a new Specified client from the provided config. The Config is expected
     /// to be deserialized into a
-    pub async fn new<E, C>(config: C) -> Result<Self>
-    where
-        E: Into<crate::Error>,
-        C: TryInto<Endpoint, Error = E>,
-    {
+    pub async fn new(config: &Endpoint) -> Result<Self> {
         Self::new_with_priority(config, |c| Ok(c)).await
     }
 
     /// new_with_priority creates a new environment where you get a hook to modify the
     /// clientbuilder and inject your own settings.
-    pub async fn new_with_priority<E, C, F>(config: C, overrides: F) -> Result<Self>
+    pub async fn new_with_priority<F>(config: &Endpoint, overrides: F) -> Result<Self>
     where
-        E: Into<crate::Error>,
-        C: TryInto<Endpoint, Error = E>,
         F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
-        let mut config: Endpoint = config.try_into().map_err(E::into)?;
         // Add Client level specifications here
         let b = ClientBuilder::new();
         let b = overrides(b)?;
@@ -154,7 +126,8 @@ impl Specified {
         }
 
         // clean up the endpoint
-        config.prefix = config.prefix.map(|mut v| {
+        let prefix = config.prefix.as_ref().map(|v| {
+            let mut v = v.clone();
             if !v.ends_with("/") {
                 v.push_str("/");
             }
@@ -162,10 +135,10 @@ impl Specified {
         });
 
         Ok(Self {
-            name: config.name,
+            name: config.name.clone(),
             client: b.build()?,
-            url_builder: OptBaseURLBuilder::some_new(config.prefix),
-            tmpl_dir: config.template_dir.map(|s| s.shell_expansion()),
+            url_builder: OptBaseURLBuilder::some_new(prefix),
+            tmpl_dir: config.template_dir.as_ref().map(<&String>::shell_expansion),
             aws_sigv4,
         })
     }

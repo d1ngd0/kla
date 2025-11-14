@@ -1,9 +1,8 @@
-use anyhow::Context;
-use config::{Config, Value};
 use reqwest::ClientBuilder;
 
 use super::Environment;
 
+use crate::config::Config;
 use crate::environment::specified::Endpoint;
 use crate::environment::{specified::Specified, unspecified::Unspecified};
 use crate::{Error, Result};
@@ -21,11 +20,7 @@ pub enum Optional {
 impl Optional {
     /// new takes an optional config, when supplied we run the config through Specified.
     /// when left None we use a default unspecified.
-    pub async fn new<E, C>(config: Option<C>) -> Result<Self>
-    where
-        E: Into<crate::Error>,
-        C: TryInto<Endpoint, Error = E>,
-    {
+    pub async fn new(config: Option<&Endpoint>) -> Result<Self> {
         let env = match config {
             Some(config) => Optional::Specified(Specified::new(config).await?),
             None => Optional::Unspecified(Unspecified::new()),
@@ -36,10 +31,8 @@ impl Optional {
     /// new takes an optional config, when supplied we run the config through Specified.
     /// when left None we use a default unspecified. Both paths specify the overrides when
     /// generating the underlying client for the environment
-    pub async fn new_with_priority<E, C, F>(config: Option<C>, overrides: F) -> Result<Self>
+    pub async fn new_with_priority<F>(config: Option<&Endpoint>, overrides: F) -> Result<Self>
     where
-        E: Into<crate::Error>,
-        C: TryInto<Endpoint, Error = E>,
         F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
         let env = match config {
@@ -48,25 +41,6 @@ impl Optional {
             }
             None => Optional::Unspecified(Unspecified::new_with_priority(overrides)?),
         };
-        Ok(env)
-    }
-
-    /// from_config is passed a path to the environment, and the full configuration
-    /// where it will go searching for it and return the associated environment or an error
-    pub async fn from_config<S>(name: Option<S>, config: &Config) -> Result<Self>
-    where
-        S: AsRef<str>,
-    {
-        let env = match name {
-            Some(name) => {
-                let endpoint = config.get::<Value>(name.as_ref()).with_context(|| {
-                    format!("environment {} was invalid or not found!", name.as_ref())
-                })?;
-                Optional::Specified(Specified::new(endpoint).await?)
-            }
-            None => Optional::Unspecified(Unspecified::new()),
-        };
-
         Ok(env)
     }
 
@@ -85,17 +59,8 @@ impl Optional {
         let env = match name {
             Some(name) => {
                 let endpoint = config
-                    .get_array("environment")
-                    .with_context(|| "No environments configured")?
-                    .into_iter()
-                    .filter_map(|env| {
-                        let env: Endpoint = env.try_deserialize().ok()?;
-                        if env.name == name.as_ref() {
-                            Some(env)
-                        } else {
-                            None
-                        }
-                    })
+                    .environments()
+                    .filter(|env| env.name == name.as_ref())
                     .next()
                     .ok_or_else(|| {
                         Error::from(format!(

@@ -1,13 +1,12 @@
-use std::{ffi::OsString, fs, path::Path, sync::Arc};
+use std::{ffi::OsString, fs, sync::Arc};
 
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
 use clap::{arg, command, ArgAction, ArgMatches, Command};
-use config::{Config, File, FileFormat};
 use kla::{
     clap::DefaultValueIfSome,
-    config::{ConfigCommand, MergeChildren},
-    Endpoint, Environment, Expand, KlaClientBuilder, KlaRequestBuilder, Opt, Optional,
-    OutputBuilder, Sigv4Request, TemplateBuilder, When, WithEnvironment,
+    config::{Config, ConfigCommand},
+    Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
+    TemplateBuilder, When, WithEnvironment,
 };
 use log::error;
 use regex::Regex;
@@ -175,32 +174,31 @@ async fn main() {
 async fn run() -> Result<(), anyhow::Error> {
     colog::init();
 
-    let config_file = [
-        "config.toml".into(),
-        "~/.kla.toml".shell_expansion(),
-        "~/.config/kla/config.toml".shell_expansion(),
-        "/etc/kla/config.toml".into(),
-    ]
-    .into_iter()
-    .filter(|f| Path::new(f).exists())
-    .next()
-    .ok_or(anyhow::Error::msg("No valid config file found"))?;
+    let config = Config::from_list(
+        [
+            "config.toml",
+            "~/.kla.toml",
+            "~/.config/kla/config.toml",
+            "/etc/kla/config.toml",
+        ]
+        .iter(),
+    )?;
 
-    let conf = Config::builder()
-        .add_source(File::new(&config_file, FileFormat::Toml))
-        .set_default("default.environment", "/etc/kla/.default-environment")?
-        .build()
-        .with_context(|| format!("could not load configuration"))?
-        .merge_children("config")
-        .context("could not load [[config]] files")?;
+    // let conf = Config::builder()
+    //     .add_source(File::new(&config_file, FileFormat::Toml))
+    //     .set_default("default.environment", "/etc/kla/.default-environment")?
+    //     .build()
+    //     .with_context(|| format!("could not load configuration"))?
+    //     .merge_children("config")
+    //     .context("could not load [[config]] files")?;
 
     // if the config file has a default environment we want to store it in a static
     // variable so it can be used everywhere
-    if let Ok(default_environment) = fs::read_to_string(
-        conf.get_string("default.environment")
-            .map(String::shell_expansion)
-            .expect("default value"),
-    ) {
+    if let Some(default_environment) = config
+        .default_environment
+        .as_ref()
+        .and_then(|path| fs::read_to_string(path).ok())
+    {
         DEFAULT_ENV
             .get_or_init(|| async { OsString::from(default_environment) })
             .await;
@@ -225,10 +223,10 @@ async fn run() -> Result<(), anyhow::Error> {
         .get_matches();
 
     match m.subcommand() {
-        Some(("environments", envs)) => run_environments(envs, &conf),
-        Some(("switch", envs)) => run_switch(envs, &conf),
-        Some(("run", envs)) => run_run(envs.get_one::<String>("template"), &m, &conf).await,
-        _ => run_root(&m, &conf).await,
+        Some(("environments", envs)) => run_environments(envs, &config),
+        Some(("switch", envs)) => run_switch(envs, &config),
+        Some(("run", envs)) => run_run(envs.get_one::<String>("template"), &m, &config).await,
+        _ => run_root(&m, &config).await,
     }
 }
 
@@ -258,14 +256,8 @@ async fn run_run<S: Into<String>>(
             })?;
 
     // Get the configuration for the template in the environment
-    let tmpl_config = match Config::builder()
-        .add_source(File::new(
-            env.tmpl_path(&template)?.as_path().to_str().unwrap(),
-            FileFormat::Toml,
-        ))
-        .build()
-    {
-        Ok(tmpl_config) => ConfigCommand::with_name(&template, tmpl_config)?,
+    let tmpl_config = match ConfigCommand::from_file(env.tmpl_path(&template)?.as_path()) {
+        Ok(tmpl_config) => tmpl_config,
         Err(_) => return run_run_empty(args, conf).await,
     };
 
@@ -329,14 +321,8 @@ async fn run_run_empty(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::E
     })?;
 
     for template in templates {
-        let tmpl_conf = Config::builder()
-        .add_source(File::new(
-            env.tmpl_path(&template)?.as_path().to_str().unwrap(),
-            FileFormat::Toml,
-        ))
-            .build().map_err(kla::Error::from)
-            .and_then(|conf| ConfigCommand::with_name(&template, conf))
-            .with_context(|| format!("environment {:?} with tempalte {} could not be rendered as command, is something wrong with the template?", env.name(), &template))?;
+        let tmpl_conf = ConfigCommand::from_file(env.tmpl_path(&template)?.as_path())
+                        .with_context(|| format!("environment {:?} with tempalte {} could not be rendered as command, is something wrong with the template?", env.name(), &template))?;
         m = m.subcommand(Command::try_from(tmpl_conf)?);
     }
 
@@ -354,20 +340,10 @@ fn run_environments(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Erro
     })?;
 
     let environments = conf
-        .get_array("environment")
-        .with_context(|| format!("Could not load environments from config"))?;
-
-    dbg!(&environments);
-    let environments = environments
-        .into_iter()
-        .map(|val| Endpoint::try_from(val))
-        .filter(|v| match v.as_ref() {
-            Ok(env) => r.is_match(&env.name),
-            Err(_) => true,
-        });
+        .environments()
+        .filter(|endpoint| r.is_match(&endpoint.name));
 
     for endpoint in environments {
-        let endpoint = endpoint.with_context(|| format!("invalid endpoint"))?;
         println!("{}", endpoint);
     }
 
@@ -384,19 +360,12 @@ fn run_switch(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     })?;
 
     let environments = conf
-        .get_array("environment")
-        .with_context(|| format!("Could not load environments from config"))?
-        .into_iter()
-        .map(|val| Endpoint::try_from(val))
-        .filter(|v| match v.as_ref() {
-            Ok(env) => r.is_match(&env.name),
-            Err(_) => true,
-        });
+        .environments()
+        .filter(|endpoint| r.is_match(&endpoint.name));
 
     let mut num_entries = 0;
     for endpoint in environments {
-        let endpoint = endpoint.with_context(|| format!("invalid endpoint"))?;
-        let endpoint: Arc<dyn SkimItem> = Arc::new(endpoint);
+        let endpoint: Arc<dyn SkimItem> = Arc::new(endpoint.clone());
         send.send(endpoint).unwrap();
 
         num_entries += 1;
@@ -428,18 +397,13 @@ fn run_switch(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
             .map(|v| v.text().to_string()),
     };
 
-    let environment_file = conf
-        .get_string("default.environment")
-        .map(String::shell_expansion)
-        .expect("default value");
-
-    if let Some(selected) = selected {
-        fs::write(&environment_file, &selected).with_context(|| {
-            format!(
-                "could not write current environment file to {}",
-                &environment_file
-            )
-        })?;
+    if let Some(selected) = selected.as_ref() {
+        match conf.default_environment.as_ref() {
+            Some(file_path) => fs::write(file_path, selected).with_context(|| {
+                format!("could not write current environment file to {}", file_path)
+            }),
+            None => Err(anyhow!("no environment file defined in configuration")),
+        }?;
         println!("Switched to environment {}", &selected)
     }
 
