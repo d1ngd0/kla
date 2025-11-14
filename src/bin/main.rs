@@ -6,8 +6,8 @@ use config::{Config, File, FileFormat};
 use kla::{
     clap::DefaultValueIfSome,
     config::{ConfigCommand, MergeChildren},
-    Endpoint, Environment, Expand, KlaClientBuilder, KlaRequestBuilder, Optional, OutputBuilder,
-    Sigv4Request, TemplateBuilder, When, WithEnvironment,
+    Endpoint, Environment, Expand, KlaClientBuilder, KlaRequestBuilder, Opt, Optional,
+    OutputBuilder, Sigv4Request, TemplateBuilder, When, WithEnvironment,
 };
 use log::error;
 use regex::Regex;
@@ -53,6 +53,12 @@ fn command() -> Command {
         .arg(arg!(--"sigv4" "Sign the request with AWS v4 Signature").action(ArgAction::SetTrue))
         .arg(arg!(--"sigv4-aws-profile" <AWS_PROFILE> "The AWS profile to use when signing a request"))
         .arg(arg!(--"sigv4-service" <SERVICE> "The AWS Service to use when signing the request"))
+        .arg(arg!(--"accept-invalid-certs" "Controls the use of certificate validation.").action(ArgAction::SetTrue).long_help("Warning
+
+You should think very carefully before using this method. If invalid certificates are trusted, any certificate for any site will be trusted for use. This includes expired certificates. This introduces significant vulnerabilities, and should only be used as a last resort."))
+        .arg(arg!(--"accept-invalid-hostnames" "Controls the use of hostname verification.").action(ArgAction::SetTrue).long_help("Warning
+
+You should think very carefully before you use this method. If hostname verification is not used, any valid certificate for any site will be trusted for use from any other. This introduces a significant vulnerability to man-in-the-middle attacks."))
         .arg(arg!(--certificate <CERTIFICATE_FILE> "The path to the certificate to use for requests. Accepts PEM and DER, expects files to end in .der or .pem. defaults to pem").action(ArgAction::Append))
         .arg(arg!("method-or-url": [METHOD_OR_URL] "The URL path (with an assumed GET method) OR the method if another argument is supplied"))
         .arg(arg!(url: [URL] "The URL path when a method is supplied"))
@@ -71,7 +77,9 @@ fn command() -> Command {
         )
 }
 
-fn args_client(
+/// args_client parses the flags from the user and applies them to the client builder.
+/// this function should be used when calling the `with_priority` functions on the environment
+pub fn args_client(
     args: &ArgMatches,
 ) -> impl Fn(ClientBuilder) -> kla::Result<ClientBuilder> + use<'_> {
     |builder| {
@@ -135,7 +143,17 @@ fn args_client(
                 )
             })?
             .opt_certificate(args.get_many("certificate"))
-            .with_context(|| format!("could not add certificate"))?)
+            .with_context(|| format!("could not add certificate"))?
+            .with_some(
+                args.get_one::<bool>("accept-invalid-certs")
+                    .map(|v| v.to_owned()),
+                ClientBuilder::danger_accept_invalid_certs,
+            )
+            .with_some(
+                args.get_one::<bool>("accept-invalid-hostnames")
+                    .map(|v| v.to_owned()),
+                ClientBuilder::danger_accept_invalid_hostnames,
+            ))
     }
 }
 
@@ -277,6 +295,9 @@ async fn run_run<S: Into<String>>(
                 .subcommand()
                 .expect("only run with template")
                 .1,
+            args.get_one::<bool>("verbose")
+                .map(|v| *v)
+                .unwrap_or_default(),
         )
         .await?;
     Ok(())
@@ -334,7 +355,10 @@ fn run_environments(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Erro
 
     let environments = conf
         .get_array("environment")
-        .with_context(|| format!("Could not load environments from config"))?
+        .with_context(|| format!("Could not load environments from config"))?;
+
+    dbg!(&environments);
+    let environments = environments
         .into_iter()
         .map(|val| Endpoint::try_from(val))
         .filter(|v| match v.as_ref() {

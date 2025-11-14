@@ -18,7 +18,7 @@ use aws_sigv4::{
     sign::v4::{self, signing_params::BuildError},
 };
 
-use crate::Opt;
+use crate::{impl_opt, Opt};
 
 #[derive(thiserror::Error, Debug)]
 /// SigningError will be returned from the builder when any issues arise
@@ -290,3 +290,5 @@ impl Sigv4Request for Request {
         Ok(req)
     }
 }
+
+impl_opt!(aws_config::ConfigLoader);

@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{impl_opt, Error, Result};
 
 use duration_string::DurationString;
 use reqwest::{header::HeaderValue, redirect::Policy, Certificate, ClientBuilder};
@@ -163,3 +163,5 @@ impl KlaClientBuilder for ClientBuilder {
         Ok(self.connect_timeout(timeout))
     }
 }
+
+impl_opt!(ClientBuilder);

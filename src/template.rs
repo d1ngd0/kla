@@ -98,15 +98,10 @@ pub struct Template {
 }
 
 impl Template {
-    pub async fn run<E>(&self, env: &E, args: &ArgMatches) -> Result<()>
+    pub async fn run<E>(&self, env: &E, args: &ArgMatches, verbose: bool) -> Result<()>
     where
         E: Environment,
     {
-        let verbose = args
-            .get_one::<bool>("verbose")
-            .map(|v| *v)
-            .unwrap_or_default();
-
         let mut context = self.context.clone();
         context.extend(
             self.config

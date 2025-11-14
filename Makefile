@@ -1,7 +1,7 @@
 .PHONY: install
 install:
 	cargo build --release
-	sudo cp target/release/kla /usr/local/bin/kla
+	cp target/release/kla ~/.local/bin/kla
 
 .PHONY: build
 build: 
@@ -9,4 +9,4 @@ build:
 
 .PHONY: uninstall
 uninstall:
-	sudo rm /usr/local/bin/kla
+	rm ~/.local/bin/kla

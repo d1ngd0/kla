@@ -59,6 +59,14 @@ pub trait Environment: Send + Sync {
     // tmpl_path is given the name of a template and renders the path for it.
     // The function just appends the name to the template directory.
     fn tmpl_path(&self, name: &str) -> Result<PathBuf> {
+        // let name = if name.ends_with(".toml") {
+        //     name.into()
+        // } else {
+        //     let mut name = String::from(name);
+        //     name.push_str(".toml");
+        //     name
+        // };
+
         // create the path
         let mut path = PathBuf::from(self.template_dir().ok_or_else(|| {
             Error::from(format!(

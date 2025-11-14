@@ -1,5 +1,6 @@
 # environments are specified in the config!
-[environment.poetry]
+[[environment]]
+name = "poetry"
 url = "https://poetrydb.org/"
 short_description = "Poetry by authors"
 # The template directory is where template are for this context which can be

@@ -9,7 +9,7 @@ use reqwest::{Client, ClientBuilder, IntoUrl};
 use serde::Deserialize;
 use skim::SkimItem;
 
-use crate::{Environment, OptBaseURLBuilder, Result, SigV4, URLBuilder};
+use crate::{Environment, Expand, OptBaseURLBuilder, Result, SigV4, URLBuilder};
 
 #[derive(Deserialize, Debug)]
 /// Endpoint is a configured environment that specifies a prefix, name, template_dir
@@ -165,7 +165,7 @@ impl Specified {
             name: config.name,
             client: b.build()?,
             url_builder: OptBaseURLBuilder::some_new(config.prefix),
-            tmpl_dir: config.template_dir,
+            tmpl_dir: config.template_dir.map(|s| s.shell_expansion()),
             aws_sigv4,
         })
     }

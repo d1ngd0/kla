@@ -2,7 +2,7 @@ use duration_string::DurationString;
 use http::Version;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
-    Body, RequestBuilder,
+    Body, Request, RequestBuilder,
 };
 use std::str::FromStr;
 use std::{
@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{impl_opt, Error, RenderGroup, Result};
+use crate::{impl_opt, impl_when, Error, RenderGroup, Result};
 
 #[derive(Debug, Clone)]
 /// KeyValue enables you to turn a string like `key=value` into an actual key value
@@ -261,3 +261,4 @@ impl KlaRequestBuilder for RequestBuilder {
 }
 
 impl_opt!(RequestBuilder);
+impl_when!(Request);
