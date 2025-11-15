@@ -3,7 +3,7 @@ use reqwest::ClientBuilder;
 use super::Environment;
 
 use crate::config::Config;
-use crate::environment::specified::Endpoint;
+use crate::config::Endpoint;
 use crate::environment::{specified::Specified, unspecified::Unspecified};
 use crate::{Error, Result};
 
