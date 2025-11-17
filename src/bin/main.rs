@@ -6,7 +6,7 @@ use kla::{
     clap::DefaultValueIfSome,
     config::{Config, ConfigCommand},
     Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
-    TemplateBuilder, When, WithEnvironment,
+    TemplateBuilder, When,
 };
 use log::error;
 use regex::Regex;
@@ -443,8 +443,6 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
 
     let request = env
         .request(method.as_str(), uri)?
-        .with_environment(&env)
-        .await?
         .opt_body(args.get_one("body"))
         .with_context(|| format!("could not set body: {:?}", args.get_one::<String>("body")))?
         .opt_headers(args.get_many("header"))
@@ -485,9 +483,8 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
             )
         })?
         .build()
-        .context("Could not build http request")?
-        .with_environment(&env)
-        .await?;
+        .context("Could not build http request")
+        .and_then(|req| Ok(env.sign(req)?))?;
 
     let request = if args.get_one("sigv4").map(|v| *v).unwrap_or(false) {
         request

@@ -19,7 +19,7 @@ pub struct Endpoint {
     /// string
     pub prefix: Option<String>,
 
-    #[serde(rename = "attributes")]
+    #[serde(rename = "settings")]
     /// client sets the client Configurations available
     pub attr: Option<Attributes>,
 

@@ -18,7 +18,7 @@ pub struct Config {
     #[serde(rename = "default_environment")]
     pub default_environment: Option<String>,
 
-    #[serde(rename = "client")]
+    #[serde(rename = "settings")]
     pub default_client: Option<Attributes>,
 
     #[serde(rename = "config", default)]

@@ -1,5 +1,5 @@
 use http::Method;
-use reqwest::{Client, ClientBuilder, IntoUrl};
+use reqwest::{Client, ClientBuilder, IntoUrl, RequestBuilder};
 
 use crate::{
     config::Endpoint, Attributes, Environment, Expand, Opt, OptBaseURLBuilder, Result, SigV4,
@@ -41,14 +41,16 @@ impl Specified {
         )?;
 
         let mut aws_sigv4: Option<SigV4> = None;
-        if config.sigv4.unwrap_or(false) {
-            aws_sigv4 = Some(
-                SigV4::new(
-                    config.sigv4_aws_profile.as_ref(),
-                    config.sigv4_aws_service.as_ref(),
+        if let Some(attr) = config.attr.as_ref() {
+            if attr.sigv4.unwrap_or(false) {
+                aws_sigv4 = Some(
+                    SigV4::new(
+                        attr.sigv4_aws_profile.as_ref(),
+                        attr.sigv4_aws_service.as_ref(),
+                    )
+                    .await?,
                 )
-                .await?,
-            )
+            }
         }
 
         // clean up the endpoint
@@ -80,7 +82,11 @@ impl Environment for Specified {
     {
         let method = method.try_into().map_err(E::into)?;
         let url = self.url_builder.build(url.as_str())?;
-        let b = self.client.request(method, url);
+        let b = self
+            .client
+            .request(method, url)
+            .with_some_result(self.attr.as_ref(), RequestBuilder::with_attributes)?;
+
         Ok(b)
     }
 

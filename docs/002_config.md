@@ -4,7 +4,7 @@ Kla searches for the "main" configuration file in the following places:
 
 - `config.toml`
 - `~/.kla.toml`
-- `~/.config/kla/config.toml` _prefered_
+- `~/.config/kla/config.toml` _preferred_
 - `/etc/kla/config.toml`
 
 The first file that it finds will be selected and parsed. If there is an error during parsing kla will return that error and stop executing.

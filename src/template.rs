@@ -6,7 +6,7 @@ use tera::{Context, Tera};
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
     Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, OutputBuilder, Result,
-    Sigv4Request, When, WithEnvironment,
+    Sigv4Request, When,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -128,8 +128,6 @@ impl Template {
                     .render("uri", &context)
                     .with_context(|| format!("could not render uri template"))?,
             )?
-            .with_environment(env)
-            .await?
             .with_some(
                 self.tmpl
                     .render("body", &context)
@@ -215,9 +213,8 @@ impl Template {
                 )
             })?
             .build()
-            .context("could not build http request")?
-            .with_environment(env)
-            .await?;
+            .context("could not build http request")
+            .and_then(|req| Ok(env.sign(req)?))?;
 
         let request = if args.get_one("sigv4").map(|v| *v).unwrap_or(false) {
             request

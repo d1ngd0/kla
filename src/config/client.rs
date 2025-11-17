@@ -1,6 +1,6 @@
-use crate::{KlaClientBuilder, Opt, Result};
+use crate::{KlaClientBuilder, KlaRequestBuilder, Opt, Result};
 use anyhow::Context;
-use reqwest::ClientBuilder;
+use reqwest::{ClientBuilder, RequestBuilder};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -21,9 +21,10 @@ pub struct Attributes {
     proxy_https: Option<String>,
     proxy_auth: Option<String>,
     connect_timeout: Option<String>,
-    sigv4: Option<String>,
-    sigv4_aws_profile: Option<String>,
-    sigv4_aws_service: Option<String>,
+    // TODO: fix this so it isn't public
+    pub sigv4: Option<bool>,
+    pub sigv4_aws_profile: Option<String>,
+    pub sigv4_aws_service: Option<String>,
     accept_invalid_certs: Option<bool>,
     accept_invalid_hostnames: Option<bool>,
     #[serde(default)]
@@ -45,6 +46,7 @@ impl WithAttributes for ClientBuilder {
             .brotli(!attr.no_brotli.unwrap_or_default())
             .deflate(!attr.no_deflate.unwrap_or_default())
             .connection_verbose(attr.verbose.unwrap_or_default())
+            .opt_connect_timeout(attr.connect_timeout.as_ref())?
             .opt_max_redirects(attr.max_redirects.as_ref())
             .no_redirects(attr.no_redirects.unwrap_or_default())
             .opt_proxy(attr.proxy.as_ref(), attr.proxy_auth.as_ref())
@@ -82,6 +84,24 @@ impl WithAttributes for ClientBuilder {
                 ClientBuilder::danger_accept_invalid_hostnames,
             );
 
+        Ok(builder)
+    }
+}
+
+impl WithAttributes for RequestBuilder {
+    fn with_attributes(self, attr: &Attributes) -> Result<Self> {
+        let builder = self
+            .opt_bearer_auth(attr.bearer_token.as_ref())
+            .opt_basic_auth(attr.basic_auth.as_ref())
+            .opt_timeout(attr.timeout.as_ref())
+            .with_context(|| format!("{:?} is not a valid format", attr.timeout.as_ref()))?
+            .opt_version(attr.http_version.as_ref())
+            .with_context(|| {
+                format!(
+                    "{:?} is not a valid http-version",
+                    attr.http_version.as_ref()
+                )
+            })?;
         Ok(builder)
     }
 }

@@ -15,9 +15,6 @@ pub use specified::*;
 mod unspecified;
 pub use unspecified::*;
 
-mod with;
-pub use with::*;
-
 /// Environment trait
 pub trait Environment: Send + Sync {
     /// request should return a RequestBuilder with any environment specific configurations

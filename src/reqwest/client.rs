@@ -28,7 +28,7 @@ pub trait KlaClientBuilder {
         userpass: Option<&String>,
     ) -> Result<ClientBuilder>;
 
-    fn connect_timeout(self, timeout: Option<&String>) -> Result<ClientBuilder>;
+    fn opt_connect_timeout(self, timeout: Option<&String>) -> Result<ClientBuilder>;
 
     fn opt_certificate<'a, T>(self, certificates: Option<T>) -> Result<ClientBuilder>
     where
@@ -150,7 +150,7 @@ impl KlaClientBuilder for ClientBuilder {
         Ok(self.proxy(proxy.basic_auth(parts.next().unwrap(), parts.next().unwrap_or_default())))
     }
 
-    fn connect_timeout(self, timeout: Option<&String>) -> Result<ClientBuilder> {
+    fn opt_connect_timeout(self, timeout: Option<&String>) -> Result<ClientBuilder> {
         if let None = timeout {
             return Ok(self);
         }
