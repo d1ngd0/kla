@@ -207,4 +207,4 @@ impl OutputBuilder {
 }
 
 impl_when!(OutputBuilder);
-impl_opt!(OutputBuilder);
+impl_opt!(OutputBuilder, crate::Error);

@@ -16,18 +16,17 @@ pub struct Unspecified {
 impl Unspecified {
     /// new is just shorthand for Self::default(). This creates a default
     /// reqwest::Client for making the requests, and a name of "default"
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(builder: ClientBuilder) -> Result<Self> {
+        Self::new_with_priority(builder, |b| Ok(b))
     }
 
     /// new_with_priority creates an unspecified environment where you get to
     /// alter the client build attributes.
-    pub fn new_with_priority<F>(overrides: F) -> Result<Self>
+    pub fn new_with_priority<F>(builder: ClientBuilder, overrides: F) -> Result<Self>
     where
         F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
-        let b = ClientBuilder::new();
-        let b = overrides(b)?;
+        let b = overrides(builder)?;
 
         Ok(Self {
             name: String::from("default"),

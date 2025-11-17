@@ -15,9 +15,11 @@ Configuration can be broken into multiple files! Your "main" config, **and only 
 
 ```toml
 [[config]]
+type = "file"
 path = "/etc/kla/elasticsearch_environment.toml"
 
 [[config]]
+type = "file"
 path = "/etc/kla/ntfy.toml"
 ```
 
@@ -25,7 +27,8 @@ You can also specify a directory!
 
 ```toml
 [[config]]
-dir = "/etc/kla/conf.d"
+type = "dir"
+path = "/etc/kla/conf.d"
 ```
 
 Specifying both a `dir` and `path` will result in an error, so don't do that. The only difference between your "main" config file and others is that only "main" can have the `[[config]]` attribute, it will be ignored in any merged files.
@@ -66,13 +69,17 @@ environment = "~/.default-environment"
 # [[config]]
 #   my_random_attribute = "something"
 [[config]]
-dir = "~/.config/kla/conf.d/"
+type = "dir"
+path = "~/.config/kla/conf.d/"
 
 # Each environment is specified in it's own environment table with
 # it's name as the key (here "env_name"). It is best practice to break
 # out environments (or related environments) into a separate file referenced
 # by a [[config]] attribute.
-[environment.env_name]
+[[environment]]
+  # The name of the environment, this will be used when selecting a value
+  name = "env_name"
+
   # The url is the prefix for any http requests we build from it. If there
   # is a specific port, scheme, or path prefix include it here.
   # feel free to add or omit the trailing slash :)

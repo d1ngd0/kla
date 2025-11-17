@@ -78,10 +78,10 @@ You should think very carefully before you use this method. If hostname verifica
 
 /// args_client parses the flags from the user and applies them to the client builder.
 /// this function should be used when calling the `with_priority` functions on the environment
-pub fn args_client(
-    args: &ArgMatches,
-) -> impl Fn(ClientBuilder) -> kla::Result<ClientBuilder> + use<'_> {
-    |builder| {
+pub fn args_client<'a>(
+    args: &'a ArgMatches,
+) -> impl Fn(ClientBuilder) -> kla::Result<ClientBuilder> + use<'a> {
+    move |builder| {
         Ok(builder
             .opt_header_agent(args.get_one("agent"))
             .with_context(|| format!("could not add agent: {:?}", args.get_one::<String>("agent")))?

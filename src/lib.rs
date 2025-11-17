@@ -10,6 +10,7 @@ mod url_builder;
 
 use std::env;
 
+pub use config::*;
 pub use environment::*;
 pub use error::*;
 pub use opt::*;

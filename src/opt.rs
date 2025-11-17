@@ -1,4 +1,11 @@
 pub trait Opt: Sized {
+    /// Error is the error which will be returned by with_some_result
+    type Error;
+
+    /// with_some_result takes a closure which returns a Result of self
+    fn with_some_result<T, F>(self, v: Option<T>, f: F) -> Result<Self, Self::Error>
+    where
+        F: Fn(Self, T) -> Result<Self, Self::Error>;
     /// with_some allows you to send an optional value to the type which will only be
     /// called when v is Some. An Example usecase is
     ///
@@ -52,8 +59,33 @@ pub trait Ok: Sized {
 
 #[macro_export]
 macro_rules! impl_opt {
-    ($for:ty) => {
+    ($for:ty, $error:ty) => {
         impl crate::opt::Opt for $for {
+            /// Error specifies the error type when calling with_some_result
+            type Error = $error;
+
+            /// with_some_result allows you to send an optional value to the type which will only be
+            /// called when v is Some. The closure itself then returns a result of self. An Example
+            /// usecase is:
+            ///
+            /// command!()
+            ///   .with_some(Some(&config.attr), ClientBuilder.with_attributes);
+            ///
+            /// here `with_attributes` returns a `Result<ClientBuilder>`
+            fn with_some_result<T, F>(
+                self,
+                v: Option<T>,
+                f: F,
+            ) -> std::result::Result<Self, Self::Error>
+            where
+                F: Fn(Self, T) -> std::result::Result<Self, Self::Error>,
+            {
+                match v {
+                    Some(v) => f(self, v),
+                    None => Ok(self),
+                }
+            }
+
             /// with_some allows you to send an optional value to the type which will only be
             /// called when v is Some. An Example usecase is
             ///
@@ -107,9 +139,13 @@ macro_rules! impl_ok {
             /// If you have something that returns a result, but you don't need the result and just
             /// want to skip setting that value, use `.ok` to turn the result into an option instead
             /// of using this function.
-            fn with_ok<T, F>(self, v: Result<T, Self::Error>, f: F) -> Result<Self, Self::Error>
+            fn with_ok<T, F>(
+                self,
+                v: std::result::Result<T, Self::Error>,
+                f: F,
+            ) -> std::result::Result<Self, Self::Error>
             where
-                F: Fn(Self, T) -> Result<Self, Self::Error>,
+                F: Fn(Self, T) -> std::result::Result<Self, Self::Error>,
             {
                 match v {
                     Ok(v) => f(self, v),

@@ -1,13 +1,17 @@
 use http::Method;
 use reqwest::{Client, ClientBuilder, IntoUrl};
 
-use crate::{config::Endpoint, Environment, Expand, OptBaseURLBuilder, Result, SigV4, URLBuilder};
+use crate::{
+    config::Endpoint, Attributes, Environment, Expand, Opt, OptBaseURLBuilder, Result, SigV4,
+    URLBuilder, WithAttributes,
+};
 
 /// Specified is an environment type which is specified through the config, it
 pub struct Specified {
     name: String,
     client: Client,
     url_builder: OptBaseURLBuilder,
+    attr: Option<Attributes>,
     tmpl_dir: Option<String>,
     aws_sigv4: Option<SigV4>,
 }
@@ -15,19 +19,26 @@ pub struct Specified {
 impl Specified {
     /// Create a new Specified client from the provided config. The Config is expected
     /// to be deserialized into a
-    pub async fn new(config: &Endpoint) -> Result<Self> {
-        Self::new_with_priority(config, |c| Ok(c)).await
+    pub async fn new(builder: ClientBuilder, config: &Endpoint) -> Result<Self> {
+        Self::new_with_priority(builder, config, |c| Ok(c)).await
     }
 
     /// new_with_priority creates a new environment where you get a hook to modify the
     /// clientbuilder and inject your own settings.
-    pub async fn new_with_priority<F>(config: &Endpoint, overrides: F) -> Result<Self>
+    pub async fn new_with_priority<F>(
+        builder: ClientBuilder,
+        config: &Endpoint,
+        overrides: F,
+    ) -> Result<Self>
     where
         F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
-        // Add Client level specifications here
-        let b = ClientBuilder::new();
-        let b = overrides(b)?;
+        // here we add the environment level configurations, along with the overrides, this
+        // means that the environment specified attributes can be overloaded by the overrides
+        // which is often the cli arguments
+        let b = overrides(
+            builder.with_some_result(config.attr.as_ref(), ClientBuilder::with_attributes)?,
+        )?;
 
         let mut aws_sigv4: Option<SigV4> = None;
         if config.sigv4.unwrap_or(false) {
@@ -51,6 +62,7 @@ impl Specified {
 
         Ok(Self {
             name: config.name.clone(),
+            attr: config.attr.clone(),
             client: b.build()?,
             url_builder: OptBaseURLBuilder::some_new(prefix),
             tmpl_dir: config.template_dir.as_ref().map(<&String>::shell_expansion),

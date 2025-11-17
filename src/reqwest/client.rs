@@ -164,4 +164,4 @@ impl KlaClientBuilder for ClientBuilder {
     }
 }
 
-impl_opt!(ClientBuilder);
+impl_opt!(ClientBuilder, crate::Error);

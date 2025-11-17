@@ -260,5 +260,5 @@ impl KlaRequestBuilder for RequestBuilder {
     }
 }
 
-impl_opt!(RequestBuilder);
+impl_opt!(RequestBuilder, crate::Error);
 impl_when!(Request);

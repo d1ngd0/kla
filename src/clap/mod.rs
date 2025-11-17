@@ -19,7 +19,7 @@ impl DefaultValueIfSome for Arg {
     }
 }
 
-impl_opt!(clap::Command);
-impl_opt!(clap::Arg);
+impl_opt!(clap::Command, crate::Error);
+impl_opt!(clap::Arg, crate::Error);
 impl_ok!(clap::Command, crate::Error);
 impl_ok!(clap::Arg, crate::Error);

@@ -291,4 +291,4 @@ impl Sigv4Request for Request {
     }
 }
 
-impl_opt!(aws_config::ConfigLoader);
+impl_opt!(aws_config::ConfigLoader, crate::Error);

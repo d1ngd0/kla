@@ -17,7 +17,8 @@ kla put /api/message 'This is my message'
 All environments are configured in the [Configuration File](002_config.md) like so:
 
 ```toml
-[environment.example]
+[[environment]]
+name = "example"
 url = "http://example.com/"
 ```
 
