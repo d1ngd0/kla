@@ -83,6 +83,7 @@ pub fn args_client<'a>(
 ) -> impl Fn(ClientBuilder) -> kla::Result<ClientBuilder> + use<'a> {
     move |builder| {
         Ok(builder
+            .use_rustls_tls()
             .opt_header_agent(args.get_one("agent"))
             .with_context(|| format!("could not add agent: {:?}", args.get_one::<String>("agent")))?
             .gzip(
