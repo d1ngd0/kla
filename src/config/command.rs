@@ -36,13 +36,13 @@ pub struct ConfigCommand {
     pub(crate) form: Vec<ConfigKV>,
 
     // these are utilized by OutputBuilder
-    #[serde(rename = "template", skip)]
+    #[serde(rename = "template")]
     pub template: Option<String>,
-    #[serde(rename = "template_failure", skip)]
+    #[serde(rename = "template_failure")]
     pub template_failure: Option<String>,
-    #[serde(rename = "output", skip)]
+    #[serde(rename = "output")]
     pub output: Option<String>,
-    #[serde(rename = "output_failure", skip)]
+    #[serde(rename = "output_failure")]
     pub output_failure: Option<String>,
 }
 

@@ -230,6 +230,7 @@ impl Template {
         let output =
             OutputBuilder::new().when(verbose, |builder| builder.request_prelude(&request));
 
+        // TODO: dry doesn't work
         let response = match args.get_one("dry").map(|b| *b).unwrap_or_default() {
             true => Response::from(http::Response::<Vec<u8>>::default()),
             false => env
