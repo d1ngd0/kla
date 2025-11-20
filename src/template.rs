@@ -116,6 +116,7 @@ impl Template {
         // Environnment and Template should be hidden behind a single implementation
         // see `with_environment` trait, do the same for template
         // Only arg level should be specified here.
+        dbg!(&self.config);
         let request = env
             .request(
                 self.tmpl
@@ -128,6 +129,10 @@ impl Template {
                     .render("uri", &context)
                     .with_context(|| format!("could not render uri template"))?,
             )?
+            .opt_timeout(self.config.timeout.as_ref())?
+            .opt_version(self.config.http_version.as_ref())?
+            .opt_bearer_auth(self.config.bearer_token.as_ref())?
+            .opt_basic_auth(self.config.basic_auth.as_ref())?
             .with_some(
                 self.tmpl
                     .render("body", &context)
@@ -163,8 +168,8 @@ impl Template {
                     .into_iter(),
             ))
             .with_context(|| format!("headers could not be loaded"))?
-            .opt_bearer_auth(args.get_one("bearer-token"))
-            .opt_basic_auth(args.get_one("basic-auth"))
+            .opt_bearer_auth(args.get_one("bearer-token"))?
+            .opt_basic_auth(args.get_one("basic-auth"))?
             .opt_query(args.get_many("query"))
             .with_context(|| {
                 format!(

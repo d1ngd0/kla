@@ -432,8 +432,8 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
                 args.get_many::<String>("header")
             )
         })?
-        .opt_bearer_auth(args.get_one("bearer-token"))
-        .opt_basic_auth(args.get_one("basic-auth"))
+        .opt_bearer_auth(args.get_one("bearer-token"))?
+        .opt_basic_auth(args.get_one("basic-auth"))?
         .opt_query(args.get_many("query"))
         .with_context(|| {
             format!(

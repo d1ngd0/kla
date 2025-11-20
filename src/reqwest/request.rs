@@ -2,17 +2,12 @@ use duration_string::DurationString;
 use http::Version;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
-    Body, Request, RequestBuilder,
+    Request, RequestBuilder,
 };
 use std::str::FromStr;
-use std::{
-    collections::HashMap,
-    fs,
-    io::{self, Read},
-    time::Duration,
-};
+use std::{collections::HashMap, fs, io, time::Duration};
 
-use crate::{impl_opt, impl_when, Error, RenderGroup, Result};
+use crate::{impl_opt, impl_when, Error, Expand, RenderGroup, Result};
 
 #[derive(Debug, Clone)]
 /// KeyValue enables you to turn a string like `key=value` into an actual key value
@@ -91,9 +86,9 @@ pub trait KlaRequestBuilder {
 
     fn opt_body<'a>(self, body: Option<&String>) -> Result<RequestBuilder>;
 
-    fn opt_basic_auth(self, userpass: Option<&String>) -> RequestBuilder;
+    fn opt_basic_auth(self, userpass: Option<&String>) -> Result<RequestBuilder>;
 
-    fn opt_bearer_auth(self, token: Option<&String>) -> RequestBuilder;
+    fn opt_bearer_auth(self, token: Option<&String>) -> Result<RequestBuilder>;
 
     fn opt_timeout(self, timeout: Option<&String>) -> Result<RequestBuilder>;
 
@@ -135,45 +130,59 @@ impl KlaRequestBuilder for RequestBuilder {
         Ok(self.timeout(d))
     }
 
-    fn opt_basic_auth(self, userpass: Option<&String>) -> RequestBuilder {
-        if let None = userpass {
-            return self;
-        }
-        let userpass = userpass.unwrap();
+    fn opt_basic_auth(self, userpass: Option<&String>) -> Result<RequestBuilder> {
+        let userpass = if let Some(userpass) = userpass {
+            match userpass.chars().nth(0) {
+                Some('-') => io::read_to_string(io::stdin())?,
+                Some('@') => fs::read_to_string(
+                    userpass
+                        .strip_prefix("@")
+                        .expect("the prefix and the matching arm must match for this to work")
+                        .shell_expansion(),
+                )?,
+                _ => userpass.into(),
+            }
+        } else {
+            return Ok(self);
+        };
+
         let mut parts = userpass.splitn(2, ":");
-        self.basic_auth(parts.next().unwrap(), parts.next())
+        Ok(self.basic_auth(parts.next().unwrap(), parts.next()))
     }
 
-    fn opt_bearer_auth(self, token: Option<&String>) -> RequestBuilder {
-        if let None = token {
-            return self;
-        }
+    fn opt_bearer_auth(self, token: Option<&String>) -> Result<RequestBuilder> {
+        let token = if let Some(token) = token {
+            match token.chars().nth(0) {
+                Some('-') => io::read_to_string(io::stdin())?,
+                Some('@') => fs::read_to_string(
+                    token
+                        .strip_prefix("@")
+                        .expect("the prefix and the matching arm must match for this to work")
+                        .shell_expansion(),
+                )?,
+                _ => token.into(),
+            }
+        } else {
+            return Ok(self);
+        };
 
-        self.bearer_auth(token.unwrap())
+        Ok(self.bearer_auth(token))
     }
 
     fn opt_body<'a>(self, body: Option<&String>) -> Result<RequestBuilder> {
-        if let None = body {
+        let body = if let Some(body) = body {
+            match body.chars().nth(0) {
+                Some('-') => io::read_to_string(io::stdin())?,
+                Some('@') => fs::read_to_string(
+                    body.strip_prefix("@")
+                        .expect("the prefix and the matching arm must match for this to work")
+                        .shell_expansion(),
+                )?,
+                _ => body.into(),
+            }
+        } else {
             return Ok(self);
-        }
-        let body = body.unwrap();
-
-        let mut body_chars = body.chars();
-
-        let body = match body_chars.next() {
-            Some('@') => {
-                let name = body_chars.collect::<String>();
-                Some(Body::from(fs::read_to_string(name)?))
-            }
-            Some('-') => {
-                let mut buf = String::new();
-                io::stdin().read_to_string(&mut buf)?;
-                Some(Body::from(buf))
-            }
-            Some(_) => Some(Body::from(body.to_owned())),
-            None => None,
-        }
-        .ok_or(Error::from("you must supply a body"))?;
+        };
 
         Ok(self.body(body))
     }

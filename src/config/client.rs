@@ -91,8 +91,8 @@ impl WithAttributes for ClientBuilder {
 impl WithAttributes for RequestBuilder {
     fn with_attributes(self, attr: &Attributes) -> Result<Self> {
         let builder = self
-            .opt_bearer_auth(attr.bearer_token.as_ref())
-            .opt_basic_auth(attr.basic_auth.as_ref())
+            .opt_bearer_auth(attr.bearer_token.as_ref())?
+            .opt_basic_auth(attr.basic_auth.as_ref())?
             .opt_timeout(attr.timeout.as_ref())
             .with_context(|| format!("{:?} is not a valid format", attr.timeout.as_ref()))?
             .opt_version(attr.http_version.as_ref())

@@ -44,6 +44,11 @@ pub struct ConfigCommand {
     pub output: Option<String>,
     #[serde(rename = "output_failure")]
     pub output_failure: Option<String>,
+
+    pub timeout: Option<String>,
+    pub http_version: Option<String>,
+    pub bearer_token: Option<String>,
+    pub basic_auth: Option<String>,
 }
 
 // default_uri specifies the default uri when one is not supplied
