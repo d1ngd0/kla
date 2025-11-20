@@ -5,7 +5,7 @@ use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
     clap::DefaultValueIfSome,
     config::{Config, ConfigCommand},
-    Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
+    Environment, KlaClientBuilder, KlaRequestBuilder, Optional, OutputBuilder, Sigv4Request,
     TemplateBuilder, When,
 };
 use log::error;
@@ -78,43 +78,33 @@ You should think very carefully before you use this method. If hostname verifica
 
 /// args_client parses the flags from the user and applies them to the client builder.
 /// this function should be used when calling the `with_priority` functions on the environment
+/// It is important that this spot not assume settings since it takes the highest priority
+/// meaning "defaults" could overload set values in `default_settings` or a specified environment
 pub fn args_client<'a>(
     args: &'a ArgMatches,
 ) -> impl Fn(ClientBuilder) -> kla::Result<ClientBuilder> + use<'a> {
     move |builder| {
+        dbg!(args.get_one::<bool>("accept-invalid-certs").copied());
         Ok(builder
             .use_rustls_tls()
             .opt_header_agent(args.get_one("agent"))
             .with_context(|| format!("could not add agent: {:?}", args.get_one::<String>("agent")))?
-            .gzip(
-                !args
-                    .get_one::<bool>("no-gzip")
-                    .map(|v| *v)
-                    .unwrap_or_default(),
-            )
-            .brotli(
-                !args
-                    .get_one::<bool>("no-brotli")
-                    .map(|v| *v)
-                    .unwrap_or_default(),
-            )
-            .deflate(
-                !args
-                    .get_one::<bool>("no-deflate")
-                    .map(|v| *v)
-                    .unwrap_or_default(),
-            )
-            .connection_verbose(
-                args.get_one::<bool>("verbose")
-                    .map(|v| *v)
-                    .unwrap_or_default(),
-            )
+            .when(args.get_raw("no-gzip").is_some(), |b| b.gzip(false))
+            .when(args.get_raw("no-brotli").is_some(), |b| b.brotli(false))
+            .when(args.get_raw("no-deflate").is_some(), |b| b.deflate(false))
+            .when(args.get_raw("verbose").is_some(), |b| {
+                b.connection_verbose(true)
+            })
+            .when(args.get_raw("no-redirects").is_some(), |b| {
+                b.no_redirects(true)
+            })
+            .when(args.get_raw("accept-invalid-certs").is_some(), |b| {
+                b.danger_accept_invalid_certs(true)
+            })
+            .when(args.get_raw("accept-invalid-hostnames").is_some(), |b| {
+                b.danger_accept_invalid_hostnames(true)
+            })
             .opt_max_redirects(args.get_one("max-redirects"))
-            .no_redirects(
-                args.get_one::<bool>("no-redirects")
-                    .map(|v| *v)
-                    .unwrap_or_default(),
-            )
             .opt_proxy(args.get_one("proxy"), args.get_one("proxy-auth"))
             .with_context(|| {
                 format!(
@@ -143,17 +133,7 @@ pub fn args_client<'a>(
                 )
             })?
             .opt_certificate(args.get_many("certificate"))
-            .with_context(|| format!("could not add certificate"))?
-            .with_some(
-                args.get_one::<bool>("accept-invalid-certs")
-                    .map(|v| v.to_owned()),
-                ClientBuilder::danger_accept_invalid_certs,
-            )
-            .with_some(
-                args.get_one::<bool>("accept-invalid-hostnames")
-                    .map(|v| v.to_owned()),
-                ClientBuilder::danger_accept_invalid_hostnames,
-            ))
+            .with_context(|| format!("could not add certificate"))?)
     }
 }
 
