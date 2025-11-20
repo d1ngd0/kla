@@ -116,7 +116,6 @@ impl Template {
         // Environnment and Template should be hidden behind a single implementation
         // see `with_environment` trait, do the same for template
         // Only arg level should be specified here.
-        dbg!(&self.config);
         let request = env
             .request(
                 self.tmpl
