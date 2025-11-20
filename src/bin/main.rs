@@ -84,7 +84,6 @@ pub fn args_client<'a>(
     args: &'a ArgMatches,
 ) -> impl Fn(ClientBuilder) -> kla::Result<ClientBuilder> + use<'a> {
     move |builder| {
-        dbg!(args.get_one::<bool>("accept-invalid-certs").copied());
         Ok(builder
             .use_rustls_tls()
             .opt_header_agent(args.get_one("agent"))
@@ -497,7 +496,11 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
         })
         .with_context(|| format!("Your request was sent but the --template or --failure-template could not be parsed, run with -v to see if your request was successful"))?
         .when(verbose, |builder| builder.response_prelude(&response))
-        .opt_output(args.get_one("output"))
+        .opt_prelude_output(Some(&String::from("-"))).await? // TODO clean up with generics
+        .opt_output(match succeed {
+            true => args.get_one("output"),
+            false => args.get_one("output-failure").or(args.get_one("output")),
+        })
         .await
         .with_context(|| format!("could not set --output"))?
         .render(response)

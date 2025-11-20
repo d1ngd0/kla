@@ -39,11 +39,13 @@ impl OutputBuilder {
     /// This output is used as the output location of the main body or template
     /// output of the request. Defaults to standard out
     pub async fn opt_output(mut self, output: Option<&String>) -> Result<Self> {
-        self.output = match output.map(|v| v.as_str()) {
-            Some("-") => Box::pin(stdout()),
-            Some(output) => Box::pin(File::create_new(output.shell_expansion()).await?),
-            None => Box::pin(stdout()),
-        };
+        if let Some(output) = output.map(|v| v.as_str()) {
+            self.output = match output {
+                "-" => Box::pin(stdout()),
+                _ => Box::pin(File::create(output.shell_expansion()).await?),
+            };
+        }
+
         Ok(self)
     }
 
@@ -54,11 +56,13 @@ impl OutputBuilder {
     /// This output is used as the location of the prelude (Headers, etc) Defaults to
     /// main body output
     pub async fn opt_prelude_output(mut self, output: Option<&String>) -> Result<Self> {
-        self.prelude_output = match output.map(|v| v.as_str()) {
-            Some("-") => Some(Box::pin(stdout())),
-            Some(output) => Some(Box::pin(File::create_new(output.shell_expansion()).await?)),
-            None => None,
-        };
+        if let Some(prelude_output) = output.map(|v| v.as_str()) {
+            self.prelude_output = Some(match prelude_output {
+                "-" => Box::pin(stdout()),
+                _ => Box::pin(File::create(prelude_output.shell_expansion()).await?),
+            });
+        }
+
         Ok(self)
     }
 
