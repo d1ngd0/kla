@@ -42,13 +42,14 @@ impl WithAttributes for ClientBuilder {
         let builder = self
             .opt_header_agent(attr.agent.as_ref())
             .with_context(|| format!("could not add agent: {:?}", attr.agent.as_ref()))?
-            .gzip(!attr.no_gzip.unwrap_or_default())
-            .brotli(!attr.no_brotli.unwrap_or_default())
-            .deflate(!attr.no_deflate.unwrap_or_default())
-            .connection_verbose(attr.verbose.unwrap_or_default())
+            // TODO these shouldn't be set unless they are some
+            .with_some(attr.no_gzip.map(|b| !b), ClientBuilder::gzip)
+            .with_some(attr.no_brotli.map(|b| !b), ClientBuilder::brotli)
+            .with_some(attr.no_deflate.map(|b| !b), ClientBuilder::deflate)
+            .with_some(attr.no_redirects, ClientBuilder::no_redirects)
+            .with_some(attr.verbose, ClientBuilder::connection_verbose)
             .opt_connect_timeout(attr.connect_timeout.as_ref())?
             .opt_max_redirects(attr.max_redirects.as_ref())
-            .no_redirects(attr.no_redirects.unwrap_or_default())
             .opt_proxy(attr.proxy.as_ref(), attr.proxy_auth.as_ref())
             .with_context(|| {
                 format!(

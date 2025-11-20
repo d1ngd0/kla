@@ -82,12 +82,13 @@ impl KlaClientBuilder for ClientBuilder {
     }
 
     fn opt_max_redirects(self, redirects: Option<&usize>) -> ClientBuilder {
-        if let None = redirects {
+        let redirects = if let Some(redirects) = redirects {
+            *redirects
+        } else {
             return self;
-        }
+        };
 
-        let redirects = redirects.unwrap();
-        self.redirect(Policy::limited(*redirects))
+        self.redirect(Policy::limited(redirects))
     }
 
     fn opt_header_agent<'a>(self, agent: Option<&'a String>) -> Result<ClientBuilder> {
