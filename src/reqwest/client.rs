@@ -1,19 +1,13 @@
 use crate::{impl_opt, impl_when, Error, Result};
 
 use duration_string::DurationString;
-use reqwest::{header::HeaderValue, redirect::Policy, Certificate, ClientBuilder};
+use reqwest::{Certificate, ClientBuilder};
 use std::str::FromStr;
 use std::{fs, path::Path, time::Duration};
 
 // KlaClientBuilder is a trait that adds additional functionality to the reqwest::ClientBuilder
 // object. These functions make it easier to marry the functionality with Clap
 pub trait KlaClientBuilder {
-    fn opt_header_agent<'a>(self, agent: Option<&'a String>) -> Result<ClientBuilder>;
-
-    fn opt_max_redirects(self, redirects: Option<&usize>) -> ClientBuilder;
-
-    fn no_redirects(self, no_redirects: bool) -> ClientBuilder;
-
     fn opt_proxy(self, proxy: Option<&String>, userpass: Option<&String>) -> Result<ClientBuilder>;
 
     fn opt_proxy_http(
@@ -71,32 +65,6 @@ impl KlaClientBuilder for ClientBuilder {
         }
 
         Ok(me)
-    }
-
-    fn no_redirects(self, no_redirects: bool) -> ClientBuilder {
-        if no_redirects {
-            self.redirect(Policy::none())
-        } else {
-            self
-        }
-    }
-
-    fn opt_max_redirects(self, redirects: Option<&usize>) -> ClientBuilder {
-        let redirects = if let Some(redirects) = redirects {
-            *redirects
-        } else {
-            return self;
-        };
-
-        self.redirect(Policy::limited(redirects))
-    }
-
-    fn opt_header_agent<'a>(self, agent: Option<&'a String>) -> Result<ClientBuilder> {
-        if let None = agent {
-            return Ok(self);
-        }
-        let agent = HeaderValue::from_str(agent.unwrap())?;
-        Ok(self.user_agent(agent))
     }
 
     fn opt_proxy(self, proxy: Option<&String>, userpass: Option<&String>) -> Result<ClientBuilder> {

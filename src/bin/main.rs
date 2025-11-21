@@ -5,12 +5,12 @@ use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
     clap::DefaultValueIfSome,
     config::{Config, ConfigCommand},
-    Environment, KlaClientBuilder, KlaRequestBuilder, Optional, OutputBuilder, Sigv4Request,
+    Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
     TemplateBuilder, When,
 };
 use log::error;
 use regex::Regex;
-use reqwest::{ClientBuilder, Response};
+use reqwest::{redirect::Policy, ClientBuilder, Response};
 use skim::{prelude::SkimOptionsBuilder, Skim, SkimItem};
 use tokio::sync::OnceCell;
 
@@ -86,8 +86,7 @@ pub fn args_client<'a>(
     move |builder| {
         Ok(builder
             .use_rustls_tls()
-            .opt_header_agent(args.get_one("agent"))
-            .with_context(|| format!("could not add agent: {:?}", args.get_one::<String>("agent")))?
+            .with_some(args.get_one::<String>("agent"), ClientBuilder::user_agent)
             .when(args.get_raw("no-gzip").is_some(), |b| b.gzip(false))
             .when(args.get_raw("no-brotli").is_some(), |b| b.brotli(false))
             .when(args.get_raw("no-deflate").is_some(), |b| b.deflate(false))
@@ -95,7 +94,10 @@ pub fn args_client<'a>(
                 b.connection_verbose(true)
             })
             .when(args.get_raw("no-redirects").is_some(), |b| {
-                b.no_redirects(true)
+                b.redirect(Policy::none())
+            })
+            .with_some(args.get_one("max-redirects"), |b, redirects| {
+                b.redirect(Policy::limited(*redirects))
             })
             .when(args.get_raw("accept-invalid-certs").is_some(), |b| {
                 b.danger_accept_invalid_certs(true)
@@ -103,7 +105,6 @@ pub fn args_client<'a>(
             .when(args.get_raw("accept-invalid-hostnames").is_some(), |b| {
                 b.danger_accept_invalid_hostnames(true)
             })
-            .opt_max_redirects(args.get_one("max-redirects"))
             .opt_proxy(args.get_one("proxy"), args.get_one("proxy-auth"))
             .with_context(|| {
                 format!(

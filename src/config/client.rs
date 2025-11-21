@@ -1,6 +1,6 @@
-use crate::{KlaClientBuilder, KlaRequestBuilder, Opt, Result};
+use crate::{KlaClientBuilder, KlaRequestBuilder, Opt, Result, When};
 use anyhow::Context;
-use reqwest::{ClientBuilder, RequestBuilder};
+use reqwest::{redirect::Policy, ClientBuilder, RequestBuilder};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -40,16 +40,18 @@ pub trait WithAttributes: Sized {
 impl WithAttributes for ClientBuilder {
     fn with_attributes(self, attr: &Attributes) -> Result<Self> {
         let builder = self
-            .opt_header_agent(attr.agent.as_ref())
-            .with_context(|| format!("could not add agent: {:?}", attr.agent.as_ref()))?
-            // TODO these shouldn't be set unless they are some
+            .with_some(attr.agent.as_ref(), ClientBuilder::user_agent)
             .with_some(attr.no_gzip.map(|b| !b), ClientBuilder::gzip)
             .with_some(attr.no_brotli.map(|b| !b), ClientBuilder::brotli)
             .with_some(attr.no_deflate.map(|b| !b), ClientBuilder::deflate)
-            .with_some(attr.no_redirects, ClientBuilder::no_redirects)
+            .with_some(attr.no_redirects, |b, v| {
+                b.when(v, |b| b.redirect(Policy::none()))
+            })
+            .with_some(attr.max_redirects, |b, redirects| {
+                b.redirect(Policy::limited(redirects))
+            })
             .with_some(attr.verbose, ClientBuilder::connection_verbose)
             .opt_connect_timeout(attr.connect_timeout.as_ref())?
-            .opt_max_redirects(attr.max_redirects.as_ref())
             .opt_proxy(attr.proxy.as_ref(), attr.proxy_auth.as_ref())
             .with_context(|| {
                 format!(
