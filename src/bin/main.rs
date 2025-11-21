@@ -90,7 +90,7 @@ pub fn args_client<'a>(
             .when(args.get_raw("no-gzip").is_some(), |b| b.gzip(false))
             .when(args.get_raw("no-brotli").is_some(), |b| b.brotli(false))
             .when(args.get_raw("no-deflate").is_some(), |b| b.deflate(false))
-            .when(args.get_count("verbose") >= 2, |b| {
+            .when(args.get_count("verbose") >= 1, |b| {
                 b.connection_verbose(true)
             })
             .when(args.get_raw("no-redirects").is_some(), |b| {
@@ -203,10 +203,9 @@ async fn run() -> Result<(), anyhow::Error> {
 
     colog::basic_builder()
         .filter_level(match m.get_count("verbose") {
-            0 => LevelFilter::Error,
-            1 => LevelFilter::Warn,
-            2 => LevelFilter::Info,
-            3 => LevelFilter::Debug,
+            0 => LevelFilter::Warn,
+            1 => LevelFilter::Info,
+            2 => LevelFilter::Debug,
             _ => LevelFilter::Trace,
         })
         .init();
@@ -244,14 +243,14 @@ async fn run_run<S: Into<String>>(
                     args.get_one::<String>("env")
                 )
             })?;
-    debug!("Running under environment {:?}", env);
+    debug!("Running under environment {:#?}", env);
 
     // Get the configuration for the template in the environment
     let tmpl_config = match ConfigCommand::from_file(env.tmpl_path(&template)?.as_path()) {
         Ok(tmpl_config) => tmpl_config,
         Err(_) => return run_run_empty(args, conf).await,
     };
-    debug!("config loaded {:?}", tmpl_config);
+    debug!("config loaded {:#?}", tmpl_config);
 
     // Run the command parsing for the template again, this will make actually
     // parse things with the configured arguments etc
@@ -411,7 +410,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
                     args.get_one::<String>("env")
                 )
             })?;
-    debug!("Running under environment {:?}", env);
+    debug!("Running under environment {:#?}", env);
 
     let (uri, method) = if let Some(uri) = args.get_one::<String>("url") {
         (
@@ -483,7 +482,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     } else {
         request
     };
-    info!("{:?}", request);
+    info!("{:#?}", request);
 
     let output = OutputBuilder::new();
 
@@ -496,7 +495,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     };
 
     let succeed = response.status().is_success();
-    info!("{:?}", response);
+    info!("{:#?}", response);
 
     output.opt_template(if succeed {
             args.get_one("template")

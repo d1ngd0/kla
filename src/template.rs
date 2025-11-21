@@ -230,7 +230,7 @@ impl Template {
         } else {
             request
         };
-        info!("Request: {:?}", request);
+        info!("Request: {:#?}", request);
 
         // TODO, change verbose to log levels
         let output = OutputBuilder::new();
@@ -243,7 +243,7 @@ impl Template {
                 .await
                 .with_context(|| format!("request failed!"))?,
         };
-        info!("Response: {:?}", response);
+        info!("Response: {:#?}", response);
 
         let succeed = response.status().is_success();
 
