@@ -1,3 +1,6 @@
+use std::fmt::Display;
+use std::fmt::Pointer;
+
 use reqwest::ClientBuilder;
 
 use super::Environment;
@@ -9,6 +12,7 @@ use crate::Opt;
 use crate::WithAttributes;
 use crate::{Error, Result};
 
+#[derive(Debug, Clone)]
 /// Optional allows you to either specify, or not specify the environment up front.
 /// When specified the specified environment underneath is called, when left unspecified
 /// the Optional environment contrives some reasonable settings.
@@ -156,5 +160,14 @@ impl Default for Optional {
     /// default returns an unspecified environment
     fn default() -> Self {
         Optional::Unspecified(Unspecified::default())
+    }
+}
+
+impl Display for Optional {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Optional::Specified(specified) => specified.fmt(f),
+            Optional::Unspecified(unspecified) => unspecified.fmt(f),
+        }
     }
 }

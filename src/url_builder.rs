@@ -106,6 +106,7 @@ impl From<PrefixURLBuilder> for AssumingURLBuilder {
     }
 }
 
+#[derive(Debug, Clone)]
 /// OptBaseURLBuilder creates a builder that when no base exists we call
 /// a LiteralURLBuilder. When there is a base we call an AssumingURLBuilder
 pub enum OptBaseURLBuilder {

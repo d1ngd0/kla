@@ -1,12 +1,12 @@
 use anyhow::Context as _;
 use clap::ArgMatches;
+use log::info;
 use reqwest::{RequestBuilder, Response};
 use tera::{Context, Tera};
 
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
-    Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, OutputBuilder, Result,
-    Sigv4Request, When,
+    Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, OutputBuilder, Result, Sigv4Request,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -98,7 +98,7 @@ pub struct Template {
 }
 
 impl Template {
-    pub async fn run<E>(&self, env: &E, args: &ArgMatches, verbose: bool) -> Result<()>
+    pub async fn run<E>(&self, env: &E, args: &ArgMatches) -> Result<()>
     where
         E: Environment,
     {
@@ -230,9 +230,10 @@ impl Template {
         } else {
             request
         };
+        info!("Request: {:?}", request);
 
-        let output =
-            OutputBuilder::new().when(verbose, |builder| builder.request_prelude(&request));
+        // TODO, change verbose to log levels
+        let output = OutputBuilder::new();
 
         // TODO: dry doesn't work
         let response = match args.get_one("dry").map(|b| *b).unwrap_or_default() {
@@ -242,6 +243,7 @@ impl Template {
                 .await
                 .with_context(|| format!("request failed!"))?,
         };
+        info!("Response: {:?}", response);
 
         let succeed = response.status().is_success();
 
@@ -271,7 +273,6 @@ impl Template {
             false => args.get_one("output-failure").or(args.get_one("output")),
         })
         .await.with_context(|| format!("could not set --output"))?
-        .when(verbose, |builder| builder.response_prelude(&response))
         .render(response)
         .await.with_context(|| format!("could not write output to specified location!"))?;
         Ok(())

@@ -6,6 +6,7 @@ use crate::{
     URLBuilder, WithAttributes,
 };
 
+#[derive(Debug, Clone)]
 /// Specified is an environment type which is specified through the config, it
 pub struct Specified {
     name: String,

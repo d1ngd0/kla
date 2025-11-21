@@ -8,7 +8,7 @@ use kla::{
     Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
     TemplateBuilder, When,
 };
-use log::error;
+use log::{debug, error, info, trace, LevelFilter};
 use regex::Regex;
 use reqwest::{redirect::Policy, ClientBuilder, Response};
 use skim::{prelude::SkimOptionsBuilder, Skim, SkimItem};
@@ -36,7 +36,7 @@ fn command() -> Command {
         .arg(arg!(-H --header <HEADER> "Specify a header The key and value should be seperated by a : (eg --header \"Content-Type: application/json\")").action(ArgAction::Append))
         .arg(arg!(-Q --query <QUERY> "Specify a query parameter The key and value should be seperated by a = (eg --query \"username=Jed\")").action(ArgAction::Append))
         .arg(arg!(-F --form <FORM> "Specify a form key=value to be passed in the form body").action(ArgAction::Append))
-        .arg(arg!(-v --verbose "make it loud and proud").action(ArgAction::SetTrue))
+        .arg(arg!(-v --verbose "-v Warning, -vv Info, -vvv Debug, -vvvv Trace; not specified logs Error").action(ArgAction::Count))
         .arg(arg!(--dry "don't actually do anything, will automatically enable verbose").action(ArgAction::SetTrue))
         .arg(arg!(--"http-version" <HTTP_VERSION> "The version of http to send the request as").value_parser(["0.9", "1.0", "1.1", "2.0", "3.0"]))
         .arg(arg!(--"no-gzip" "Do not automatically uncompress gzip responses").action(ArgAction::SetTrue))
@@ -90,7 +90,7 @@ pub fn args_client<'a>(
             .when(args.get_raw("no-gzip").is_some(), |b| b.gzip(false))
             .when(args.get_raw("no-brotli").is_some(), |b| b.brotli(false))
             .when(args.get_raw("no-deflate").is_some(), |b| b.deflate(false))
-            .when(args.get_raw("verbose").is_some(), |b| {
+            .when(args.get_count("verbose") >= 2, |b| {
                 b.connection_verbose(true)
             })
             .when(args.get_raw("no-redirects").is_some(), |b| {
@@ -153,8 +153,6 @@ async fn main() {
 }
 
 async fn run() -> Result<(), anyhow::Error> {
-    colog::init();
-
     let config = Config::from_list(
         [
             "config.toml",
@@ -203,6 +201,16 @@ async fn run() -> Result<(), anyhow::Error> {
         )
         .get_matches();
 
+    colog::basic_builder()
+        .filter_level(match m.get_count("verbose") {
+            0 => LevelFilter::Error,
+            1 => LevelFilter::Warn,
+            2 => LevelFilter::Info,
+            3 => LevelFilter::Debug,
+            _ => LevelFilter::Trace,
+        })
+        .init();
+
     match m.subcommand() {
         Some(("environments", envs)) => run_environments(envs, &config),
         Some(("switch", envs)) => run_switch(envs, &config),
@@ -224,6 +232,7 @@ async fn run_run<S: Into<String>>(
         Some(template) if template == "--help" => return run_run_empty(args, conf).await,
         Some(template) => template,
     };
+    trace!("running template {}", template);
 
     // Get the environment
     let env =
@@ -235,12 +244,14 @@ async fn run_run<S: Into<String>>(
                     args.get_one::<String>("env")
                 )
             })?;
+    debug!("Running under environment {:?}", env);
 
     // Get the configuration for the template in the environment
     let tmpl_config = match ConfigCommand::from_file(env.tmpl_path(&template)?.as_path()) {
         Ok(tmpl_config) => tmpl_config,
         Err(_) => return run_run_empty(args, conf).await,
     };
+    debug!("config loaded {:?}", tmpl_config);
 
     // Run the command parsing for the template again, this will make actually
     // parse things with the configured arguments etc
@@ -268,15 +279,13 @@ async fn run_run<S: Into<String>>(
                 .subcommand()
                 .expect("only run with template")
                 .1,
-            args.get_one::<bool>("verbose")
-                .map(|v| *v)
-                .unwrap_or_default(),
         )
         .await?;
     Ok(())
 }
 
 async fn run_run_empty(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    debug!("no template, running templates with empty set");
     let env =
         Optional::from_config_with_priority(args.get_one::<String>("env"), conf, args_client(args))
             .await
@@ -402,11 +411,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
                     args.get_one::<String>("env")
                 )
             })?;
-
-    let verbose = args
-        .get_one::<bool>("verbose")
-        .map(|v| *v)
-        .unwrap_or_default();
+    debug!("Running under environment {:?}", env);
 
     let (uri, method) = if let Some(uri) = args.get_one::<String>("url") {
         (
@@ -421,6 +426,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
             "GET".into(),
         )
     };
+    debug!("rendering with [{}] {}", method, uri);
 
     let request = env
         .request(method.as_str(), uri)?
@@ -477,8 +483,9 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     } else {
         request
     };
+    info!("{:?}", request);
 
-    let output = OutputBuilder::new().when(verbose, |builder| builder.request_prelude(&request));
+    let output = OutputBuilder::new();
 
     let response = match args.get_one("dry").map(|b| *b).unwrap_or_default() {
         true => Response::from(http::Response::<Vec<u8>>::default()),
@@ -489,6 +496,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     };
 
     let succeed = response.status().is_success();
+    info!("{:?}", response);
 
     output.opt_template(if succeed {
             args.get_one("template")
@@ -496,8 +504,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
             args.get_one("failure-template")
         })
         .with_context(|| format!("Your request was sent but the --template or --failure-template could not be parsed, run with -v to see if your request was successful"))?
-        .when(verbose, |builder| builder.response_prelude(&response))
-        .opt_prelude_output(Some(&String::from("-"))).await? // TODO clean up with generics
+            // TODO fix verbose to logging
         .opt_output(match succeed {
             true => args.get_one("output"),
             false => args.get_one("output-failure").or(args.get_one("output")),
