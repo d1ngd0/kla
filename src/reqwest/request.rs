@@ -4,26 +4,32 @@ use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Request, RequestBuilder,
 };
-use std::str::FromStr;
-use std::{collections::HashMap, fs, io, time::Duration};
+use std::{collections::HashMap, time::Duration};
+use std::{fmt::Display, str::FromStr};
 
-use crate::{impl_opt, impl_when, Error, Expand, RenderGroup, Result};
+use crate::{impl_opt, impl_when, Error, RenderGroup, Result};
 
 #[derive(Debug, Clone)]
 /// KeyValue enables you to turn a string like `key=value` into an actual key value
 /// object.
-pub struct KeyValue {
+pub struct KeyValue<const SEP: char> {
     /// name is the name of the key value
     name: String,
     /// value is the value of the key value
     value: String,
 }
 
-impl TryFrom<&String> for KeyValue {
+impl<const SEP: char> Display for KeyValue<SEP> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}{}", self.name, SEP, self.value)
+    }
+}
+
+impl<const SEP: char> TryFrom<&String> for KeyValue<SEP> {
     type Error = crate::Error;
 
     fn try_from(value: &String) -> Result<Self> {
-        let mut parts = value.splitn(2, "=");
+        let mut parts = value.splitn(2, SEP);
 
         let name: String = parts
             .next()
@@ -46,7 +52,7 @@ impl TryFrom<&String> for KeyValue {
 
 /// This implementation allows for a template to be turned into a
 /// key value object
-impl<'a> TryFrom<RenderGroup<'a>> for KeyValue {
+impl<'a, const SEP: char> TryFrom<RenderGroup<'a>> for KeyValue<SEP> {
     type Error = crate::Error;
 
     fn try_from(value: RenderGroup<'a>) -> std::result::Result<Self, Self::Error> {
@@ -69,26 +75,20 @@ pub trait KlaRequestBuilder {
     fn opt_headers<E, T, V>(self, headers: Option<T>) -> Result<RequestBuilder>
     where
         E: Into<Error>,
-        V: TryInto<KeyValue, Error = E>,
+        V: TryInto<KeyValue<':'>, Error = E>,
         T: Iterator<Item = V>;
 
     fn opt_query<E, T, V>(self, headers: Option<T>) -> Result<RequestBuilder>
     where
         E: Into<Error>,
-        V: TryInto<KeyValue, Error = E>,
+        V: TryInto<KeyValue<'='>, Error = E>,
         T: Iterator<Item = V>;
 
     fn opt_form<E, T, V>(self, form: Option<T>) -> Result<RequestBuilder>
     where
         E: Into<Error>,
-        V: TryInto<KeyValue, Error = E>,
+        V: TryInto<KeyValue<'='>, Error = E>,
         T: Iterator<Item = V>;
-
-    fn opt_body<'a>(self, body: Option<&String>) -> Result<RequestBuilder>;
-
-    fn opt_basic_auth(self, userpass: Option<&String>) -> Result<RequestBuilder>;
-
-    fn opt_bearer_auth(self, token: Option<&String>) -> Result<RequestBuilder>;
 
     fn opt_timeout(self, timeout: Option<&String>) -> Result<RequestBuilder>;
 
@@ -130,67 +130,10 @@ impl KlaRequestBuilder for RequestBuilder {
         Ok(self.timeout(d))
     }
 
-    fn opt_basic_auth(self, userpass: Option<&String>) -> Result<RequestBuilder> {
-        let userpass = if let Some(userpass) = userpass {
-            match userpass.chars().nth(0) {
-                Some('-') => io::read_to_string(io::stdin())?,
-                Some('@') => fs::read_to_string(
-                    userpass
-                        .strip_prefix("@")
-                        .expect("the prefix and the matching arm must match for this to work")
-                        .shell_expansion(),
-                )?,
-                _ => userpass.into(),
-            }
-        } else {
-            return Ok(self);
-        };
-
-        let mut parts = userpass.splitn(2, ":");
-        Ok(self.basic_auth(parts.next().unwrap(), parts.next()))
-    }
-
-    fn opt_bearer_auth(self, token: Option<&String>) -> Result<RequestBuilder> {
-        let token = if let Some(token) = token {
-            match token.chars().nth(0) {
-                Some('-') => io::read_to_string(io::stdin())?,
-                Some('@') => fs::read_to_string(
-                    token
-                        .strip_prefix("@")
-                        .expect("the prefix and the matching arm must match for this to work")
-                        .shell_expansion(),
-                )?,
-                _ => token.into(),
-            }
-        } else {
-            return Ok(self);
-        };
-
-        Ok(self.bearer_auth(token))
-    }
-
-    fn opt_body<'a>(self, body: Option<&String>) -> Result<RequestBuilder> {
-        let body = if let Some(body) = body {
-            match body.chars().nth(0) {
-                Some('-') => io::read_to_string(io::stdin())?,
-                Some('@') => fs::read_to_string(
-                    body.strip_prefix("@")
-                        .expect("the prefix and the matching arm must match for this to work")
-                        .shell_expansion(),
-                )?,
-                _ => body.into(),
-            }
-        } else {
-            return Ok(self);
-        };
-
-        Ok(self.body(body))
-    }
-
     fn opt_query<E, T, V>(self, query: Option<T>) -> Result<RequestBuilder>
     where
         E: Into<Error>,
-        V: TryInto<KeyValue, Error = E>,
+        V: TryInto<KeyValue<'='>, Error = E>,
         T: Iterator<Item = V>,
     {
         let query = if let Some(query) = query {
@@ -202,7 +145,7 @@ impl KlaRequestBuilder for RequestBuilder {
         let mut map = HashMap::new();
 
         for item in query {
-            let item: KeyValue = item.try_into().map_err(|err| err.into())?;
+            let item: KeyValue<'='> = item.try_into().map_err(|err| err.into())?;
             map.insert(item.name, item.value);
         }
 
@@ -216,7 +159,7 @@ impl KlaRequestBuilder for RequestBuilder {
     fn opt_form<E, T, V>(self, form: Option<T>) -> Result<RequestBuilder>
     where
         E: Into<Error>,
-        V: TryInto<KeyValue, Error = E>,
+        V: TryInto<KeyValue<'='>, Error = E>,
         T: Iterator<Item = V>,
     {
         let form = if let Some(form) = form {
@@ -228,7 +171,7 @@ impl KlaRequestBuilder for RequestBuilder {
         let mut map = HashMap::new();
 
         for item in form {
-            let item: KeyValue = item.try_into().map_err(|err| err.into())?;
+            let item: KeyValue<'='> = item.try_into().map_err(|err| err.into())?;
             map.insert(item.name, item.value);
         }
 
@@ -242,7 +185,7 @@ impl KlaRequestBuilder for RequestBuilder {
     fn opt_headers<E, T, V>(self, headers: Option<T>) -> Result<RequestBuilder>
     where
         E: Into<Error>,
-        V: TryInto<KeyValue, Error = E>,
+        V: TryInto<KeyValue<':'>, Error = E>,
         T: Iterator<Item = V>,
     {
         let headers = if let Some(headers) = headers {
@@ -254,7 +197,7 @@ impl KlaRequestBuilder for RequestBuilder {
         let mut map = HeaderMap::new();
 
         for item in headers {
-            let item: KeyValue = item.try_into().map_err(|err| err.into())?;
+            let item: KeyValue<':'> = item.try_into().map_err(|err| err.into())?;
             map.insert(
                 HeaderName::try_from(item.name)?,
                 HeaderValue::try_from(item.value)?,

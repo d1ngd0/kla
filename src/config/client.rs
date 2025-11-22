@@ -1,4 +1,4 @@
-use crate::{KlaClientBuilder, KlaRequestBuilder, Opt, Result, When};
+use crate::{clap::arg_file_value, KlaClientBuilder, KlaRequestBuilder, Opt, Result, When};
 use anyhow::Context;
 use reqwest::{redirect::Policy, ClientBuilder, RequestBuilder};
 use serde::Deserialize;
@@ -94,8 +94,17 @@ impl WithAttributes for ClientBuilder {
 impl WithAttributes for RequestBuilder {
     fn with_attributes(self, attr: &Attributes) -> Result<Self> {
         let builder = self
-            .opt_bearer_auth(attr.bearer_token.as_ref())?
-            .opt_basic_auth(attr.basic_auth.as_ref())?
+            .with_some(
+                arg_file_value(attr.bearer_token.as_ref(), "bearer_token")?,
+                RequestBuilder::bearer_auth,
+            )
+            .with_some(
+                arg_file_value(attr.basic_auth.as_ref(), "basic_auth")?,
+                |b, basic_auth| {
+                    let mut parts = basic_auth.splitn(2, ":");
+                    b.basic_auth(parts.next().unwrap(), parts.next())
+                },
+            )
             .opt_timeout(attr.timeout.as_ref())
             .with_context(|| format!("{:?} is not a valid format", attr.timeout.as_ref()))?
             .opt_version(attr.http_version.as_ref())

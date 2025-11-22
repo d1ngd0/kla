@@ -3,14 +3,14 @@ use std::{ffi::OsString, fs, sync::Arc};
 use anyhow::{anyhow, Context as _};
 use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
-    clap::DefaultValueIfSome,
+    clap::{arg_file_value, DefaultValueIfSome},
     config::{Config, ConfigCommand},
     Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
     TemplateBuilder, When,
 };
 use log::{debug, error, info, trace, LevelFilter};
 use regex::Regex;
-use reqwest::{redirect::Policy, ClientBuilder, Response};
+use reqwest::{redirect::Policy, ClientBuilder, RequestBuilder, Response};
 use skim::{prelude::SkimOptionsBuilder, Skim, SkimItem};
 use tokio::sync::OnceCell;
 
@@ -410,7 +410,8 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
                     args.get_one::<String>("env")
                 )
             })?;
-    debug!("Running under environment {:#?}", env);
+    info!("Environment: {}", env.name());
+    debug!("{:#?}", env);
 
     let (uri, method) = if let Some(uri) = args.get_one::<String>("url") {
         (
@@ -425,12 +426,14 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
             "GET".into(),
         )
     };
-    debug!("rendering with [{}] {}", method, uri);
+    info!("uri request [{}] {}", method, uri);
 
     let request = env
         .request(method.as_str(), uri)?
-        .opt_body(args.get_one("body"))
-        .with_context(|| format!("could not set body: {:?}", args.get_one::<String>("body")))?
+        .with_some(
+            arg_file_value(args.get_one("body"), "body")?,
+            RequestBuilder::body,
+        )
         .opt_headers(args.get_many("header"))
         .with_context(|| {
             format!(
@@ -438,8 +441,17 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
                 args.get_many::<String>("header")
             )
         })?
-        .opt_bearer_auth(args.get_one("bearer-token"))?
-        .opt_basic_auth(args.get_one("basic-auth"))?
+        .with_some(
+            arg_file_value(args.get_one("bearer-token"), "bearer-token")?,
+            RequestBuilder::bearer_auth,
+        )
+        .with_some(
+            arg_file_value(args.get_one("basic-auth"), "basic-auth")?,
+            |b, basic_auth| {
+                let mut parts = basic_auth.splitn(2, ":");
+                b.basic_auth(parts.next().unwrap(), parts.next())
+            },
+        )
         .opt_query(args.get_many("query"))
         .with_context(|| {
             format!(
