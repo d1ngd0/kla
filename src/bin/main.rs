@@ -264,10 +264,7 @@ async fn run_run<S: Into<String>>(
         )
         .get_matches();
 
-    TemplateBuilder::new()
-        // TODO: This should be changed to try_config, and we shouldn't turn it into
-        // a ConfigCommand here, all that should be done inside the builder
-        // We will need to get the name in the config somehow
+    let output = TemplateBuilder::new()
         .config(tmpl_config.clone())
         .build()?
         .run(
@@ -278,8 +275,11 @@ async fn run_run<S: Into<String>>(
                 .subcommand()
                 .expect("only run with template")
                 .1,
+            args.get_one("dry").map(|b| *b).unwrap_or_default(),
         )
         .await?;
+
+    output.copy(&mut tokio::io::stdout()).await?;
     Ok(())
 }
 
@@ -496,8 +496,6 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     };
     info!("{:#?}", request);
 
-    let output = OutputBuilder::new();
-
     let response = match args.get_one("dry").map(|b| *b).unwrap_or_default() {
         true => Response::from(http::Response::<Vec<u8>>::default()),
         false => env
@@ -509,21 +507,18 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     let succeed = response.status().is_success();
     info!("{:#?}", response);
 
-    output.opt_template(if succeed {
-            args.get_one("template")
-        } else {
-            args.get_one("failure-template")
-        })
+    let output = OutputBuilder::new().with_some_result(match succeed {
+            true => args.get_one::<String>("template"),
+            false => args.get_one::<String>("failure-template"),
+        }, OutputBuilder::template)
         .with_context(|| format!("Your request was sent but the --template or --failure-template could not be parsed, run with -v to see if your request was successful"))?
-            // TODO fix verbose to logging
-        .opt_output(match succeed {
-            true => args.get_one("output"),
-            false => args.get_one("output-failure").or(args.get_one("output")),
-        })
-        .await
-        .with_context(|| format!("could not set --output"))?
-        .render(response)
+        .build(response)
         .await.with_context(|| format!("could not write output to specified location!"))?;
+
+    match succeed {
+        true => output.copy(&mut tokio::io::stdout()).await?,
+        false => output.copy(&mut tokio::io::stderr()).await?,
+    };
 
     Ok(())
 }
