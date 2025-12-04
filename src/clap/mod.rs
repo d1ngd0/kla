@@ -76,11 +76,12 @@ pub async fn arg_file_writer(
             Ok(Box::pin(tokio::io::stdout()) as Pin<Box<dyn AsyncWrite>>)
         }
         _ => {
+            let name = name.shell_expansion();
             debug!("write to file {}", name);
-            File::open(name)
+            File::open(&name)
                 .await
                 .map::<Pin<Box<dyn AsyncWrite>>, _>(|w| Box::pin(w))
-                .with_context(|| format!("The file {} could not be written to", name))
+                .with_context(|| format!("The file {} could not be written to", &name))
         }
     };
 
