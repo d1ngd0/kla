@@ -3,7 +3,7 @@ use std::{ffi::OsString, fs, sync::Arc};
 use anyhow::{anyhow, Context as _};
 use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
-    clap::{arg_file_value, DefaultValueIfSome},
+    clap::{arg_file_value, arg_file_writer, DefaultValueIfSome},
     config::{Config, ConfigCommand},
     Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
     TemplateBuilder, When,
@@ -279,7 +279,39 @@ async fn run_run<S: Into<String>>(
         )
         .await?;
 
-    output.copy(&mut tokio::io::stdout()).await?;
+    let mut writer = match output.is_success() {
+        true => {
+            let writer = arg_file_writer(tmpl_config.output.as_ref(), "output")
+                .await
+                .transpose()?;
+
+            if let Some(writer) = writer {
+                writer
+            } else {
+                arg_file_writer(args.get_one::<String>("output"), "output")
+                    .await
+                    .transpose()?
+                    .unwrap_or_else(|| Box::pin(tokio::io::stdout()))
+            }
+        }
+        false => {
+            let writer = arg_file_writer(tmpl_config.output.as_ref(), "output_failure")
+                .await
+                .transpose()?;
+
+            if let Some(writer) = writer {
+                writer
+            } else {
+                arg_file_writer(args.get_one::<String>("output-failure"), "output-failure")
+                    .await
+                    .transpose()?
+                    .unwrap_or_else(|| Box::pin(tokio::io::stdout()))
+            }
+        }
+    };
+
+    output.copy(&mut writer).await?;
+
     Ok(())
 }
 
@@ -515,10 +547,18 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
         .build(response)
         .await.with_context(|| format!("could not write output to specified location!"))?;
 
-    match succeed {
-        true => output.copy(&mut tokio::io::stdout()).await?,
-        false => output.copy(&mut tokio::io::stderr()).await?,
+    let mut writer = match succeed {
+        true => arg_file_writer(args.get_one::<String>("output"), "output")
+            .await
+            .transpose()?
+            .unwrap_or_else(|| Box::pin(tokio::io::stdout())),
+        false => arg_file_writer(args.get_one::<String>("failure-output"), "output")
+            .await
+            .transpose()?
+            .unwrap_or_else(|| Box::pin(tokio::io::stderr())),
     };
+
+    output.copy(&mut writer).await?;
 
     Ok(())
 }

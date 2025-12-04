@@ -161,11 +161,6 @@ impl Template {
                     args.get_many::<String>("header")
                 )
             })?
-            // TODO: Fix `when`. Now that we are defering to render templates until we
-            // actually call them we need to implement `when` here. Good call on RenderGroups
-            // previous paul, they are needed now.
-            // Implementation should add a filter which could be called with
-            // .filter(config.filterWhen)
             .opt_headers(Some(
                 self.tmpl
                     .fetch_with_prefix("header.", &context)

@@ -1,4 +1,4 @@
-use std::{fs, io};
+use std::{fs, io, pin::Pin};
 
 use anyhow::Context;
 use clap::{
@@ -6,6 +6,7 @@ use clap::{
     Arg,
 };
 use log::debug;
+use tokio::{fs::File, io::AsyncWrite};
 
 use crate::{impl_ok, impl_opt, Expand as _};
 
@@ -57,6 +58,33 @@ pub fn arg_file_value(val: Option<&String>, name: &str) -> Result<Option<String>
             val.map(|v| v.as_str()).unwrap_or_default()
         )
     })
+}
+
+pub async fn arg_file_writer(
+    val: Option<&String>,
+    name: &str,
+) -> Option<Result<Pin<Box<dyn AsyncWrite>>, anyhow::Error>> {
+    let val = if let Some(val) = val {
+        val
+    } else {
+        return None;
+    };
+
+    let writer = match val.chars().nth(0) {
+        Some('-') => {
+            debug!("write to standard out");
+            Ok(Box::pin(tokio::io::stdout()) as Pin<Box<dyn AsyncWrite>>)
+        }
+        _ => {
+            debug!("write to file {}", name);
+            File::open(name)
+                .await
+                .map::<Pin<Box<dyn AsyncWrite>>, _>(|w| Box::pin(w))
+                .with_context(|| format!("The file {} could not be written to", name))
+        }
+    };
+
+    Some(writer)
 }
 
 impl_opt!(clap::Command, crate::Error);

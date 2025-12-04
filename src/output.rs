@@ -1,6 +1,7 @@
 use std::{fmt::Debug, io::Cursor};
 
 use crate::{impl_opt, impl_when, ContextBuilder, FetchMany, Result};
+use http::{HeaderMap, HeaderValue, StatusCode};
 use reqwest::Response;
 use tera::Tera;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -30,9 +31,11 @@ impl OutputBuilder {
     // build creates the output
     pub async fn build(self, response: Response) -> Result<Output> {
         let OutputBuilder { tmpl } = self;
+        let headers = response.headers().clone();
+        let status = response.status();
 
         // Write the body output
-        let output = match tmpl.has("body") {
+        let content = match tmpl.has("body") {
             true => {
                 let buf = tmpl.render(
                     "body",
@@ -41,60 +44,88 @@ impl OutputBuilder {
                         .await?
                         .build(),
                 )?;
-                Output::from(buf)
+                OutputContent::from(buf)
             }
-            false => Output::from(response),
+            false => OutputContent::from(response),
         };
 
-        Ok(output)
+        Ok(Output {
+            status,
+            headers,
+            content,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct Output {
+    status: StatusCode,
+    headers: HeaderMap<HeaderValue>,
+    content: OutputContent,
+}
+
+impl Output {
+    pub fn is_success(&self) -> bool {
+        self.status.is_success()
+    }
+
+    pub fn headers(&self) -> &HeaderMap<HeaderValue> {
+        &self.headers
+    }
+
+    pub async fn copy<'a, W>(self, writer: &'a mut W) -> tokio::io::Result<u64>
+    where
+        W: AsyncWrite + Unpin + ?Sized,
+    {
+        self.content.copy(writer).await
     }
 }
 
 #[derive(Debug)]
 /// Output is the output of the template
-pub enum Output {
+pub enum OutputContent {
     Steam(StreamingOutput),
     Owned(OwnedOuput),
 }
 
 /// Enable output to be built from StreamingOutput
-impl From<StreamingOutput> for Output {
+impl From<StreamingOutput> for OutputContent {
     fn from(value: StreamingOutput) -> Self {
-        Output::Steam(value)
+        OutputContent::Steam(value)
     }
 }
 
 /// Enable output to be built from OwnedOutput
-impl From<OwnedOuput> for Output {
+impl From<OwnedOuput> for OutputContent {
     fn from(value: OwnedOuput) -> Self {
-        Output::Owned(value)
+        OutputContent::Owned(value)
     }
 }
 
 /// Create an ownded output from a string
-impl From<String> for Output {
+impl From<String> for OutputContent {
     fn from(value: String) -> Self {
         Self::from(OwnedOuput::new(value))
     }
 }
 
-impl From<Response> for Output {
+impl From<Response> for OutputContent {
     fn from(value: Response) -> Self {
         Self::from(StreamingOutput { response: value })
     }
 }
 
-impl Output {
+impl OutputContent {
     pub async fn copy<'a, W>(self, writer: &'a mut W) -> tokio::io::Result<u64>
     where
         W: AsyncWrite + Unpin + ?Sized,
     {
         match self {
-            Output::Steam(streaming_output) => {
+            OutputContent::Steam(streaming_output) => {
                 let mut reader = streaming_output.as_async_reader();
                 tokio::io::copy(&mut reader, writer).await
             }
-            Output::Owned(owned_ouput) => {
+            OutputContent::Owned(owned_ouput) => {
                 let mut reader: Cursor<String> = owned_ouput.into();
                 tokio::io::copy(&mut reader, writer).await
             }
