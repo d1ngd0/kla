@@ -13,6 +13,9 @@ pub use request::Endpoint;
 mod client;
 pub use client::*;
 
+mod collection;
+pub use collection::*;
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(rename = "default_environment")]
