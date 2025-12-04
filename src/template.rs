@@ -247,7 +247,6 @@ impl Template {
         };
         info!("Request: {:#?}", request);
 
-        // TODO: dry doesn't work
         let response = match dry {
             true => Response::from(http::Response::<Vec<u8>>::default()),
             false => env

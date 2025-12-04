@@ -1,0 +1,29 @@
+# Here we specify the first group, a group is made up of multiple environments
+# that we want to run a shared template against. All of these environments must
+# have any templates defined
+[[group]]
+  environments = [
+    "poetry",
+    "poetry",
+  ]
+
+# Just like a template, a collection can also take an arguments. They work the
+# same as arguments
+[[args]]
+  name = "author"
+  help = "The author you want to look into"
+
+# Within `group.template` you can specify multiple templates. Each of these templates
+# will be run sequentially per environment, but concurrently between environments. Here
+# we are using the supplied argument to set the author template argument.
+[[group.template]]
+  name = "author"
+  args = ["{{ author }}"]
+
+# You can call the same template multiple times, here you can see we always want to call for
+# William Shakespeare, regardless of input
+[[group.template]]
+  name = "author"
+  args = ["William Shakespeare"]
+
+# When run, this template will generate 4 http requests

@@ -199,6 +199,20 @@ async fn run() -> Result<(), anyhow::Error> {
                 )
                 .arg(arg!(-h --help "Show the help command, and all templates available to you.")),
         )
+        .subcommand(
+            Command::new("bulk")
+            .about("Allows you to run multiple http requests all at once")
+            .alias("collection")
+            .arg(arg!(collection: [collection] "The collection or directory of collections you want to run"))
+            .allow_external_subcommands(true)
+            .disable_help_flag(true)
+            .arg(
+                arg!([args] ... "Any arguments for the collection")
+                    .trailing_var_arg(true)
+                    .allow_hyphen_values(true),
+            )
+            .arg(arg!(-h --help "Show the help text for collection or collection directory")),
+        )
         .get_matches();
 
     colog::basic_builder()
@@ -423,7 +437,7 @@ fn run_switch(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
             Some(file_path) => fs::write(file_path, selected).with_context(|| {
                 format!("could not write current environment file to {}", file_path)
             }),
-            None => Err(anyhow!("no environment file defined in configuration")),
+            None => Err(anyhow!("config file does not specify a default_environment value in the root. This file stores the selected environment. Try adding `default_environment = \"~/.config/kla/.env\"` to your kla config file.")),
         }?;
         println!("Switched to environment {}", &selected)
     }
