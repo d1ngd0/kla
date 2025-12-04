@@ -1,3 +1,4 @@
+mod collection;
 mod environment; // environment struct and logic
 mod error; // package error handling
 mod opt;
@@ -10,6 +11,7 @@ mod url_builder;
 
 use std::env;
 
+pub use collection::*;
 pub use config::*;
 pub use environment::*;
 pub use error::*;

@@ -1843,6 +1843,7 @@ dependencies = [
  "inquire",
  "log",
  "paste",
+ "rayon",
  "regex",
  "reqwest",
  "serde",

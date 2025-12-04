@@ -1,5 +1,8 @@
+use std::ffi::OsString;
+use std::iter;
+
 use anyhow::Context as _;
-use clap::ArgMatches;
+use clap::{ArgMatches, Command};
 use log::info;
 use reqwest::{RequestBuilder, Response};
 use tera::{Context, Tera};
@@ -99,7 +102,29 @@ pub struct Template {
     config: ConfigCommand,
 }
 
+impl TryFrom<&Template> for Command {
+    type Error = crate::Error;
+
+    fn try_from(value: &Template) -> std::result::Result<Self, Self::Error> {
+        Command::try_from(value.config.clone())
+    }
+}
+
 impl Template {
+    pub async fn run_matches_from<I, T, E>(&self, env: &E, args: I, dry: bool) -> Result<Output>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<OsString> + Clone,
+        E: Environment,
+    {
+        let cmd = Command::try_from(self)?;
+        let args =
+            iter::once(OsString::from(&self.config.name)).chain(args.into_iter().map(|s| s.into()));
+        let args = cmd.get_matches_from(args);
+
+        self.run(env, &args, dry).await
+    }
+
     pub async fn run<E>(&self, env: &E, args: &ArgMatches, dry: bool) -> Result<Output>
     where
         E: Environment,
@@ -247,7 +272,6 @@ impl Template {
         };
         info!("Request: {:#?}", request);
 
-        // TODO: dry doesn't work
         let response = match dry {
             true => Response::from(http::Response::<Vec<u8>>::default()),
             false => env

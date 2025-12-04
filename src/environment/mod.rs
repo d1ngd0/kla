@@ -4,7 +4,7 @@ use std::{ffi::OsString, path::PathBuf};
 use std::fs::{self, DirEntry};
 
 use http::Method;
-use reqwest::{IntoUrl, Request, Response};
+use reqwest::{ClientBuilder, IntoUrl, Request, Response};
 
 use crate::{Error, Result};
 
@@ -14,9 +14,11 @@ mod specified;
 pub use specified::*;
 mod unspecified;
 pub use unspecified::*;
+mod caching_loader;
+pub use caching_loader::*;
 
 /// Environment trait
-pub trait Environment: Send + Sync {
+pub trait Environment: Send + Sync + std::fmt::Debug {
     /// request should return a RequestBuilder with any environment specific configurations
     /// already applied. It is expected that the implementation of environment already have
     /// a client created with any environment level specifics applied as well.
@@ -82,5 +84,45 @@ pub trait Environment: Send + Sync {
     /// request with the default implementation.
     fn sign(&self, req: Request) -> Result<Request> {
         Ok(req)
+    }
+}
+
+/// EnvironmentLoader Enables a type to load an environment from a name
+/// Since there are multiple environment types you must specify
+/// the type of environment you expect this loader to generate
+pub trait EnvironmentLoader<E: Environment> {
+    #[allow(async_fn_in_trait)]
+    async fn async_load_environment_with_priority<S, F>(self, env: S, overrides: F) -> Result<E>
+    where
+        S: AsRef<str>,
+        F: FnOnce(ClientBuilder) -> Result<ClientBuilder>;
+
+    fn load_environment_with_priority<S, F>(self, env: S, overrides: F) -> Result<E>
+    where
+        S: AsRef<str>,
+        F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
+        Self: Sized,
+    {
+        futures::executor::block_on(self.async_load_environment_with_priority(env, overrides))
+    }
+
+    #[allow(async_fn_in_trait)]
+    /// load_environment allows the called to get an environment without providing overrides
+    /// to the client builder
+    async fn async_load_environment<S>(self, env: S) -> Result<E>
+    where
+        S: AsRef<str>,
+        Self: Sized,
+    {
+        self.async_load_environment_with_priority(env, |cb| Ok(cb))
+            .await
+    }
+
+    fn load_environment<S>(self, env: S) -> Result<E>
+    where
+        S: AsRef<str>,
+        Self: Sized,
+    {
+        futures::executor::block_on(self.async_load_environment(env))
     }
 }

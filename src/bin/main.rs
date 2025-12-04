@@ -5,8 +5,8 @@ use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
     clap::{arg_file_value, arg_file_writer, DefaultValueIfSome},
     config::{Config, ConfigCommand},
-    Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
-    TemplateBuilder, When,
+    CollectionBuilder, CollectionConfig, Environment, KlaClientBuilder, KlaRequestBuilder, Opt,
+    Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
 };
 use log::{debug, error, info, trace, LevelFilter};
 use regex::Regex;
@@ -18,6 +18,7 @@ static DEFAULT_ENV: OnceCell<OsString> = OnceCell::const_new();
 
 static ROOT_ABOUT: &'static str = include_str!("txt/root_about.txt");
 static RUN_ABOUT: &'static str = include_str!("txt/run_about.txt");
+static COLLECTION_ABOUT: &'static str = include_str!("txt/run_about.txt");
 
 fn command() -> Command {
     command!()
@@ -199,6 +200,20 @@ async fn run() -> Result<(), anyhow::Error> {
                 )
                 .arg(arg!(-h --help "Show the help command, and all templates available to you.")),
         )
+        .subcommand(
+            Command::new("bulk")
+            .about("Allows you to run multiple http requests all at once")
+            .alias("collection")
+            .arg(arg!(collection: [collection] "The collection or directory of collections you want to run"))
+            .allow_external_subcommands(true)
+            .disable_help_flag(true)
+            .arg(
+                arg!([args] ... "Any arguments for the collection")
+                    .trailing_var_arg(true)
+                    .allow_hyphen_values(true),
+            )
+            .arg(arg!(-h --help "Show the help text for collection or collection directory")),
+        )
         .get_matches();
 
     colog::basic_builder()
@@ -214,8 +229,64 @@ async fn run() -> Result<(), anyhow::Error> {
         Some(("environments", envs)) => run_environments(envs, &config),
         Some(("switch", envs)) => run_switch(envs, &config),
         Some(("run", envs)) => run_run(envs.get_one::<String>("template"), &m, &config).await,
+        Some(("bulk", envs)) => {
+            run_collection(envs.get_one::<String>("collection"), &m, &config).await
+        }
         _ => run_root(&m, &config).await,
     }
+}
+
+/// run_run will exectute a template
+async fn run_collection<S: Into<String>>(
+    collection: Option<S>,
+    args: &ArgMatches,
+    conf: &Config,
+) -> Result<(), anyhow::Error> {
+    // Get the name of the template
+    let collection: String = match collection.map(|s| s.into()) {
+        None => return run_collection_empty(args, conf).await,
+        Some(collection) if collection == "help" => return run_collection_empty(args, conf).await,
+        Some(collection) if collection == "--help" => {
+            return run_collection_empty(args, conf).await
+        }
+        Some(collection) => collection,
+    };
+    trace!("running collection {}", collection);
+
+    let clct_config =
+        match CollectionConfig::from_file(conf.collection_path(&collection)?.as_path()) {
+            Ok(clct_config) => clct_config,
+            Err(_) => return run_collection_empty(args, conf).await,
+        };
+    debug!("collection loaded {:#?}", clct_config);
+
+    // Run the command parsing for the template again, this will make actually
+    // parse things with the configured arguments etc
+    let m = command()
+        .subcommand(
+            Command::new("bulk")
+                .about("run templates defined for the environment")
+                .long_about(COLLECTION_ABOUT)
+                .alias("collection")
+                .subcommand(Command::try_from(clct_config.clone())?),
+        )
+        .get_matches();
+
+    let _collection = CollectionBuilder::new(conf)
+        .config(&clct_config)
+        .build(args_client(args))?
+        .run(
+            m.subcommand()
+                .expect("only run as bulk")
+                .1
+                .subcommand()
+                .expect("only run with collection")
+                .1,
+            args.get_one("dry").map(|b| *b).unwrap_or_default(),
+        )
+        .await?;
+
+    Ok(())
 }
 
 /// run_run will exectute a template
@@ -352,6 +423,37 @@ async fn run_run_empty(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::E
     Ok(())
 }
 
+async fn run_collection_empty(_args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    debug!("no collection, running collection with empty set");
+
+    let mut m = Command::new("bulk")
+        .about("run collections")
+        .alias("collection")
+        .arg_required_else_help(true);
+
+    let collections = conf.collections().with_context(|| {
+        format!(
+            "could not fetch all collections from {:?}",
+            conf.collection_dir.as_ref()
+        )
+    })?;
+
+    for collection in collections {
+        let tmpl_conf = CollectionConfig::from_file(conf.collection_path(&collection)?.as_path())
+            .with_context(|| {
+            format!(
+                "collection {} could not be rendered as command",
+                &collection
+            )
+        })?;
+        m = m.subcommand(Command::try_from(tmpl_conf)?);
+    }
+
+    command().subcommand(m).get_matches();
+
+    Ok(())
+}
+
 fn run_environments(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     let r = Regex::new(args.get_one::<String>("regex").unwrap()).with_context(|| {
         format!(
@@ -423,7 +525,7 @@ fn run_switch(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
             Some(file_path) => fs::write(file_path, selected).with_context(|| {
                 format!("could not write current environment file to {}", file_path)
             }),
-            None => Err(anyhow!("no environment file defined in configuration")),
+            None => Err(anyhow!("config file does not specify a default_environment value in the root. This file stores the selected environment. Try adding `default_environment = \"~/.config/kla/.env\"` to your kla config file.")),
         }?;
         println!("Switched to environment {}", &selected)
     }
