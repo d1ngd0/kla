@@ -72,16 +72,16 @@ pub async fn arg_file_writer(
 
     let writer = match val.chars().nth(0) {
         Some('-') => {
-            debug!("write to standard out");
+            debug!("writing {} standard out", name);
             Ok(Box::pin(tokio::io::stdout()) as Pin<Box<dyn AsyncWrite>>)
         }
         _ => {
-            let name = name.shell_expansion();
-            debug!("write to file {}", name);
-            File::open(&name)
+            let val = val.shell_expansion();
+            debug!("writing {} to file {}", name, val);
+            File::create(&val)
                 .await
                 .map::<Pin<Box<dyn AsyncWrite>>, _>(|w| Box::pin(w))
-                .with_context(|| format!("The file {} could not be written to", &name))
+                .with_context(|| format!("The file {} could not be written to", &val))
         }
     };
 
