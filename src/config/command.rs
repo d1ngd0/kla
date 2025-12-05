@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs, ops::Deref, path::Path};
 
 use anyhow::Context as _;
 use clap::{command, Arg, ArgAction, ArgMatches, Command};
@@ -20,7 +20,7 @@ pub struct ConfigCommand {
     description: Option<String>,
 
     #[serde(rename = "arg", default)]
-    args: Vec<ConfigArg>,
+    args: ConfigArgCollection,
 
     #[serde(rename = "body")]
     body: Option<String>,
@@ -147,76 +147,7 @@ impl ConfigCommand {
 
     // args_context returns a Tera Context object from the arguments specifified
     pub fn args_context(&self, args: &ArgMatches) -> crate::Result<Context> {
-        macro_rules! get_one {
-    ($args:expr, $ty:ty, $name:expr) => {
-        $args
-            .try_get_one::<$ty>($name)
-            .map_err(|_| {
-                crate::Error::from(format!(
-                    "argument `{}` had type of `{}` which is apparently wrong, set `type` to the correct value in your template",
-                    $name,
-                    stringify!($ty),
-                ))
-            })?
-    };
-}
-
-        macro_rules! get_many {
-            ($args:expr, $ty:ty, $name:expr) => {
-                $args
-                    .try_get_many::<$ty>($name)
-                    .map_err(|_| {
-                        crate::Error::from(format!(
-                            "{} type of {} wrong, set `type` to the correct value",
-                            $name,
-                            stringify!($ty),
-                        ))
-                    })?
-                    .map(|v| v.collect::<Vec<_>>())
-            };
-        }
-
-        let mut ctx = Context::new();
-        for arg in &self.args {
-            match arg.arg_type {
-                ConfigArgType::String if arg.many_valued => {
-                    get_many!(args, String, &arg.name)
-                        .iter()
-                        .for_each(|v| ctx.insert(&arg.name, &v));
-                }
-                ConfigArgType::String if arg.password => get_one!(args, String, &arg.name)
-                    .map(|v| v.clone())
-                    .or_else(|| {
-                        Password::new("Password:")
-                            .without_confirmation()
-                            .prompt()
-                            .ok()
-                    })
-                    .iter()
-                    .for_each(|v| ctx.insert(&arg.name, v)),
-                ConfigArgType::String => get_one!(args, String, &arg.name)
-                    .iter()
-                    .for_each(|v| ctx.insert(&arg.name, v)),
-                ConfigArgType::Number if arg.many_valued => {
-                    get_many!(args, Number, &arg.name)
-                        .iter()
-                        .for_each(|v| ctx.insert(&arg.name, &v));
-                }
-                ConfigArgType::Number => get_one!(args, Number, &arg.name)
-                    .iter()
-                    .for_each(|v| ctx.insert(&arg.name, v)),
-                ConfigArgType::Bool if arg.many_valued => {
-                    get_many!(args, bool, &arg.name)
-                        .iter()
-                        .for_each(|v| ctx.insert(&arg.name, &v));
-                }
-                ConfigArgType::Bool => get_one!(args, bool, &arg.name)
-                    .iter()
-                    .for_each(|v| ctx.insert(&arg.name, v)),
-            }
-        }
-
-        Ok(ctx)
+        self.args.args_context(args)
     }
 }
 
@@ -228,14 +159,7 @@ impl TryFrom<ConfigCommand> for Command {
             .name(&value.name)
             .with_some(value.short_description.as_ref(), Command::about)
             .with_some(value.description.as_ref(), Command::long_about)
-            .with_ok_value(
-                value
-                    .args
-                    .into_iter()
-                    .map(|v| ConfigArg::try_into(v))
-                    .collect::<Result<Vec<Arg>, Self::Error>>(),
-                Command::args,
-            )
+            .with_ok_value(<Vec<Arg>>::try_from(value.args), Command::args)
             .with_context(|| format!("{} invalid command configuration", &value.name))?;
 
         Ok(command)
@@ -334,6 +258,102 @@ pub struct ConfigArg {
     action: Option<ArgAction>,
     #[serde(rename = "password", default)]
     password: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ConfigArgCollection(Vec<ConfigArg>);
+
+impl Deref for ConfigArgCollection {
+    type Target = Vec<ConfigArg>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl ConfigArgCollection {
+    // args_context returns a Tera Context object from the arguments specifified
+    pub fn args_context(&self, args: &ArgMatches) -> crate::Result<Context> {
+        macro_rules! get_one {
+    ($args:expr, $ty:ty, $name:expr) => {
+        $args
+            .try_get_one::<$ty>($name)
+            .map_err(|_| {
+                crate::Error::from(format!(
+                    "argument `{}` had type of `{}` which is apparently wrong, set `type` to the correct value in your template",
+                    $name,
+                    stringify!($ty),
+                ))
+            })?
+    };
+}
+
+        macro_rules! get_many {
+            ($args:expr, $ty:ty, $name:expr) => {
+                $args
+                    .try_get_many::<$ty>($name)
+                    .map_err(|_| {
+                        crate::Error::from(format!(
+                            "{} type of {} wrong, set `type` to the correct value",
+                            $name,
+                            stringify!($ty),
+                        ))
+                    })?
+                    .map(|v| v.collect::<Vec<_>>())
+            };
+        }
+
+        let mut ctx = Context::new();
+        for arg in self.iter() {
+            match arg.arg_type {
+                ConfigArgType::String if arg.many_valued => {
+                    get_many!(args, String, &arg.name)
+                        .iter()
+                        .for_each(|v| ctx.insert(&arg.name, &v));
+                }
+                ConfigArgType::String if arg.password => get_one!(args, String, &arg.name)
+                    .map(|v| v.clone())
+                    .or_else(|| {
+                        Password::new("Password:")
+                            .without_confirmation()
+                            .prompt()
+                            .ok()
+                    })
+                    .iter()
+                    .for_each(|v| ctx.insert(&arg.name, v)),
+                ConfigArgType::String => get_one!(args, String, &arg.name)
+                    .iter()
+                    .for_each(|v| ctx.insert(&arg.name, v)),
+                ConfigArgType::Number if arg.many_valued => {
+                    get_many!(args, Number, &arg.name)
+                        .iter()
+                        .for_each(|v| ctx.insert(&arg.name, &v));
+                }
+                ConfigArgType::Number => get_one!(args, Number, &arg.name)
+                    .iter()
+                    .for_each(|v| ctx.insert(&arg.name, v)),
+                ConfigArgType::Bool if arg.many_valued => {
+                    get_many!(args, bool, &arg.name)
+                        .iter()
+                        .for_each(|v| ctx.insert(&arg.name, &v));
+                }
+                ConfigArgType::Bool => get_one!(args, bool, &arg.name)
+                    .iter()
+                    .for_each(|v| ctx.insert(&arg.name, v)),
+            }
+        }
+
+        Ok(ctx)
+    }
+}
+
+impl TryFrom<ConfigArgCollection> for Vec<Arg> {
+    type Error = crate::Error;
+
+    fn try_from(value: ConfigArgCollection) -> std::result::Result<Self, Self::Error> {
+        let value = value.0;
+        value.into_iter().map(|v| ConfigArg::try_into(v)).collect()
+    }
 }
 
 /// arg_action_default sets the default value of arg actions

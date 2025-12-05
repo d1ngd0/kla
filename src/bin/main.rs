@@ -5,8 +5,8 @@ use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
     clap::{arg_file_value, arg_file_writer, DefaultValueIfSome},
     config::{Config, ConfigCommand},
-    Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request,
-    TemplateBuilder, When,
+    Collection, Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder,
+    Sigv4Request, TemplateBuilder, When,
 };
 use log::{debug, error, info, trace, LevelFilter};
 use regex::Regex;
@@ -228,8 +228,37 @@ async fn run() -> Result<(), anyhow::Error> {
         Some(("environments", envs)) => run_environments(envs, &config),
         Some(("switch", envs)) => run_switch(envs, &config),
         Some(("run", envs)) => run_run(envs.get_one::<String>("template"), &m, &config).await,
+        Some(("bulk", envs)) => {
+            run_collection(envs.get_one::<String>("collection"), &m, &config).await
+        }
         _ => run_root(&m, &config).await,
     }
+}
+
+/// run_run will exectute a template
+async fn run_collection<S: Into<String>>(
+    collection: Option<S>,
+    args: &ArgMatches,
+    conf: &Config,
+) -> Result<(), anyhow::Error> {
+    // Get the name of the template
+    let collection: String = match collection.map(|s| s.into()) {
+        None => return run_collection_empty(args, conf).await,
+        Some(collection) if collection == "help" => return run_collection_empty(args, conf).await,
+        Some(collection) if collection == "--help" => {
+            return run_collection_empty(args, conf).await
+        }
+        Some(collection) => collection,
+    };
+    trace!("running collection {}", collection);
+
+    let clct_config = match Collection::from_file(conf.collection_path(&collection)?.as_path()) {
+        Ok(tmpl_config) => tmpl_config,
+        Err(_) => return run_collection_empty(args, conf).await,
+    };
+    debug!("collection loaded {:#?}", clct_config);
+
+    Ok(())
 }
 
 /// run_run will exectute a template
@@ -358,6 +387,37 @@ async fn run_run_empty(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::E
     for template in templates {
         let tmpl_conf = ConfigCommand::from_file(env.tmpl_path(&template)?.as_path())
                         .with_context(|| format!("environment {:?} with tempalte {} could not be rendered as command, is something wrong with the template?", env.name(), &template))?;
+        m = m.subcommand(Command::try_from(tmpl_conf)?);
+    }
+
+    command().subcommand(m).get_matches();
+
+    Ok(())
+}
+
+async fn run_collection_empty(_args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    debug!("no collection, running collection with empty set");
+
+    let mut m = Command::new("bulk")
+        .about("run collections")
+        .alias("collection")
+        .arg_required_else_help(true);
+
+    let collections = conf.collections().with_context(|| {
+        format!(
+            "could not fetch all collections from {:?}",
+            conf.collection_dir.as_ref()
+        )
+    })?;
+
+    for collection in collections {
+        let tmpl_conf = Collection::from_file(conf.collection_path(&collection)?.as_path())
+            .with_context(|| {
+                format!(
+                    "collection {} could not be rendered as command",
+                    &collection
+                )
+            })?;
         m = m.subcommand(Command::try_from(tmpl_conf)?);
     }
 

@@ -1,6 +1,9 @@
-use crate::{Expand, Result};
+use crate::{Error, Expand, Result};
 use anyhow::Context;
 use serde::Deserialize;
+use std::ffi::OsString;
+use std::fs::DirEntry;
+use std::path::PathBuf;
 use std::{fs, iter, path::Path};
 
 mod command;
@@ -29,6 +32,9 @@ pub struct Config {
 
     #[serde(rename = "environment", default)]
     pub environment: Vec<Endpoint>,
+
+    #[serde(rename = "collection")]
+    pub collection_dir: Option<String>,
 }
 
 impl Config {
@@ -93,6 +99,45 @@ impl Config {
             .default_environment
             .as_ref()
             .map(<&String>::shell_expansion);
+    }
+
+    // collection_path is given the name of a collection and renders the path for it.
+    // The function just appends the name to the collection directory. If the extension,
+    // `.toml`, is missing that is appeneded as well.
+    pub fn collection_path(&self, name: &str) -> Result<PathBuf> {
+        let name = if name.ends_with(".toml") {
+            name.into()
+        } else {
+            let mut name = String::from(name);
+            name.push_str(".toml");
+            name
+        };
+
+        // create the path
+        let mut path = PathBuf::from(
+            self.collection_dir
+                .as_ref()
+                .ok_or_else(|| Error::from(format!("no configured collection directory",)))?,
+        );
+        path.push(name);
+
+        Ok(path)
+    }
+
+    /// collections iterates over the collection_dir and returns each path it finds
+    pub fn collections(&self) -> Result<Box<dyn Iterator<Item = String>>> {
+        let collection_dir = match self.collection_dir.as_ref() {
+            Some(collection) => collection,
+            None => return Ok(Box::new(std::iter::empty())),
+        };
+
+        let collections = fs::read_dir(collection_dir)?
+            .collect::<std::result::Result<Vec<DirEntry>, std::io::Error>>()?
+            .into_iter()
+            .filter(|f| f.file_type().map(|v| v.is_file()).unwrap_or(false))
+            .filter_map(|f| OsString::from(f.path().file_stem()?).into_string().ok());
+
+        Ok(Box::new(collections))
     }
 }
 
