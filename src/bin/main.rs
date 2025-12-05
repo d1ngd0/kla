@@ -18,6 +18,7 @@ static DEFAULT_ENV: OnceCell<OsString> = OnceCell::const_new();
 
 static ROOT_ABOUT: &'static str = include_str!("txt/root_about.txt");
 static RUN_ABOUT: &'static str = include_str!("txt/run_about.txt");
+static COLLECTION_ABOUT: &'static str = include_str!("txt/run_about.txt");
 
 fn command() -> Command {
     command!()
@@ -257,6 +258,18 @@ async fn run_collection<S: Into<String>>(
         Err(_) => return run_collection_empty(args, conf).await,
     };
     debug!("collection loaded {:#?}", clct_config);
+
+    // Run the command parsing for the template again, this will make actually
+    // parse things with the configured arguments etc
+    let _m = command()
+        .subcommand(
+            Command::new("bulk")
+                .about("run templates defined for the environment")
+                .long_about(COLLECTION_ABOUT)
+                .alias("collection")
+                .subcommand(Command::try_from(clct_config.clone())?),
+        )
+        .get_matches();
 
     Ok(())
 }
