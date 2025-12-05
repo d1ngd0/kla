@@ -29,6 +29,8 @@ impl OutputBuilder {
     }
 
     // build creates the output
+    // TODO: We need to set context from arguments here as well so
+    // args can manipulate the output template
     pub async fn build(self, response: Response) -> Result<Output> {
         let OutputBuilder { tmpl } = self;
         let headers = response.headers().clone();
