@@ -35,7 +35,7 @@ impl<E: Environment, L: EnvironmentLoader<E> + Copy> EnvironmentLoader<CachedEnv
     /// for later retrieval. On each call it will check the hashmap first and return any value
     /// found. IT ONLY CHECKS ON env NAME. Which means any overrides specified will only work
     /// on the first call.
-    async fn load_environment_with_priority<S, F>(
+    async fn async_load_environment_with_priority<S, F>(
         self,
         name: S,
         overrides: F,
@@ -50,7 +50,7 @@ impl<E: Environment, L: EnvironmentLoader<E> + Copy> EnvironmentLoader<CachedEnv
             None => {
                 let env = self
                     .env_loader
-                    .load_environment_with_priority(name, overrides)
+                    .async_load_environment_with_priority(name, overrides)
                     .await?;
 
                 let env = CachedEnvironment::new(env);
@@ -68,7 +68,7 @@ impl<E: Environment, L: EnvironmentLoader<E>> EnvironmentLoader<CachedEnvironmen
     /// load_environment_with_priority will load the environment and return it as a
     /// cachedEnvironment, however since this impelemtation of the call consumes the
     /// loader we don't actually cache anything
-    async fn load_environment_with_priority<S, F>(
+    async fn async_load_environment_with_priority<S, F>(
         self,
         name: S,
         overrides: F,
@@ -79,7 +79,7 @@ impl<E: Environment, L: EnvironmentLoader<E>> EnvironmentLoader<CachedEnvironmen
     {
         let env = self
             .env_loader
-            .load_environment_with_priority(name, overrides)
+            .async_load_environment_with_priority(name, overrides)
             .await?;
         Ok(CachedEnvironment::new(env))
     }

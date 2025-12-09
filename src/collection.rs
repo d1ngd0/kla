@@ -1,19 +1,19 @@
-use crate::{CachingLoader, CollectionConfig, EnvironmentLoader, Result, Specified};
+use crate::{
+    CachingLoader, CollectedTemplateGroup, CollectionConfig, EnvironmentLoader, Result, Specified,
+};
 use clap::ArgMatches;
 use reqwest::ClientBuilder;
 
 #[derive(Debug, Clone)]
-pub struct CollectionBuilder<'a, E: EnvironmentLoader<Specified>> {
-    env_loader: CachingLoader<Specified, E>,
+pub struct CollectionBuilder<'a, E: EnvironmentLoader<Specified> + Copy> {
+    env_loader: E,
     config: Option<&'a CollectionConfig>,
 }
 
-impl<'a, E: EnvironmentLoader<Specified>> CollectionBuilder<'a, E> {
-    pub fn new(environment_loader: E) -> Self {
-        let caching_loader = CachingLoader::new(environment_loader);
-
+impl<'a, E: EnvironmentLoader<Specified> + Copy> CollectionBuilder<'a, E> {
+    pub fn new(env_loader: E) -> Self {
         Self {
-            env_loader: caching_loader,
+            env_loader,
             config: None,
         }
     }
@@ -27,7 +27,14 @@ impl<'a, E: EnvironmentLoader<Specified>> CollectionBuilder<'a, E> {
     where
         F: Fn(ClientBuilder) -> Result<ClientBuilder>,
     {
-        for self.config.
+        // TODO: you were here, just testing things out
+        let groups = self.config.unwrap().templates(self.env_loader);
+        for group in groups {
+            for template in group {
+                dbg!(template?);
+            }
+        }
+
         Ok(Collection {})
     }
 }
@@ -40,4 +47,3 @@ impl Collection {
         Ok(())
     }
 }
-

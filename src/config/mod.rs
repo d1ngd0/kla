@@ -144,7 +144,11 @@ impl Config {
 impl EnvironmentLoader<Specified> for &Config {
     /// load_environment_with_priority will load a Specified environment from the configuration
     /// and overrides provided.
-    async fn load_environment_with_priority<S, F>(self, env: S, overrides: F) -> Result<Specified>
+    async fn async_load_environment_with_priority<S, F>(
+        self,
+        env: S,
+        overrides: F,
+    ) -> Result<Specified>
     where
         S: AsRef<str>,
         F: FnOnce(reqwest::ClientBuilder) -> Result<reqwest::ClientBuilder>,
