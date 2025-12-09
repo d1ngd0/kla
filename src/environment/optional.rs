@@ -57,6 +57,8 @@ impl Optional {
     /// from_config is passed a path to the environment, and the full configuration
     /// where it will go searching for it and return the associated environment or an error
     /// the function also allows specifying overrides
+    /// This function also applies the client configurations for the config object itself
+    /// so you don't need to do that
     pub async fn from_config_with_priority<S, F>(
         name: Option<S>,
         config: &Config,

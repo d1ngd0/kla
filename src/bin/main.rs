@@ -5,8 +5,8 @@ use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
     clap::{arg_file_value, arg_file_writer, DefaultValueIfSome},
     config::{Config, ConfigCommand},
-    Collection, Environment, KlaClientBuilder, KlaRequestBuilder, Opt, Optional, OutputBuilder,
-    Sigv4Request, TemplateBuilder, When,
+    CollectionBuilder, CollectionConfig, Environment, KlaClientBuilder, KlaRequestBuilder, Opt,
+    Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
 };
 use log::{debug, error, info, trace, LevelFilter};
 use regex::Regex;
@@ -253,15 +253,16 @@ async fn run_collection<S: Into<String>>(
     };
     trace!("running collection {}", collection);
 
-    let clct_config = match Collection::from_file(conf.collection_path(&collection)?.as_path()) {
-        Ok(tmpl_config) => tmpl_config,
-        Err(_) => return run_collection_empty(args, conf).await,
-    };
+    let clct_config =
+        match CollectionConfig::from_file(conf.collection_path(&collection)?.as_path()) {
+            Ok(clct_config) => clct_config,
+            Err(_) => return run_collection_empty(args, conf).await,
+        };
     debug!("collection loaded {:#?}", clct_config);
 
     // Run the command parsing for the template again, this will make actually
     // parse things with the configured arguments etc
-    let _m = command()
+    let m = command()
         .subcommand(
             Command::new("bulk")
                 .about("run templates defined for the environment")
@@ -270,6 +271,19 @@ async fn run_collection<S: Into<String>>(
                 .subcommand(Command::try_from(clct_config.clone())?),
         )
         .get_matches();
+
+    let _collection = CollectionBuilder::new(conf)
+        .config(&clct_config)
+        .build(args_client(args))?
+        .run(
+            m.subcommand()
+                .expect("only run as bulk")
+                .1
+                .subcommand()
+                .expect("only run with collection")
+                .1,
+            args.get_one("dry").map(|b| *b).unwrap_or_default(),
+        );
 
     Ok(())
 }
@@ -424,13 +438,13 @@ async fn run_collection_empty(_args: &ArgMatches, conf: &Config) -> Result<(), a
     })?;
 
     for collection in collections {
-        let tmpl_conf = Collection::from_file(conf.collection_path(&collection)?.as_path())
+        let tmpl_conf = CollectionConfig::from_file(conf.collection_path(&collection)?.as_path())
             .with_context(|| {
-                format!(
-                    "collection {} could not be rendered as command",
-                    &collection
-                )
-            })?;
+            format!(
+                "collection {} could not be rendered as command",
+                &collection
+            )
+        })?;
         m = m.subcommand(Command::try_from(tmpl_conf)?);
     }
 

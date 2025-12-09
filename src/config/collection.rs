@@ -1,7 +1,10 @@
-use std::{fs, path::Path};
+use std::{fs, path::Path, rc::Rc};
 
-use crate::{config::command::ConfigArgCollection, Ok as _, Opt as _, Result};
-use anyhow::Context as _;
+use crate::{
+    config::command::ConfigArgCollection, CachingLoader, ConfigCommand, Environment,
+    EnvironmentLoader, Ok as _, Opt as _, Result, Specified, Template, TemplateBuilder,
+};
+use anyhow::{anyhow, Context as _};
 use clap::{command, Arg, ArgMatches, Command};
 use log::debug;
 use serde::Deserialize;
@@ -15,6 +18,31 @@ pub struct CollectionGroup {
     templates: Vec<TemplateArgs>,
 }
 
+pub struct EnvironmentGroup<'a, L: EnvironmentLoader<Specified> + Copy> {
+    depth: usize,
+    index: usize,
+    env_loader: Rc<CachingLoader<Specified, L>>,
+    group: &'a CollectionGroup,
+}
+
+impl<'a, L: EnvironmentLoader<Specified> + Copy> Iterator for EnvironmentGroup<'a, L> {
+    type Item = Result<Template>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let env = self.group.environments.get(self.index)?;
+
+        let loader = Rc::get_mut(&mut self.env_loader)
+            .expect("multiple mutable accesses of environment loader");
+        let env = match loader.load_environment(env) {
+            Ok(env) => env,
+            Err(err) => return Some(Err(err)),
+        };
+
+        let tmpl_args = self.group.templates.get(self.depth)?;
+        Some(tmpl_args.template(env))
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct TemplateArgs {
     #[serde(rename = "name")]
@@ -23,8 +51,24 @@ pub struct TemplateArgs {
     args: Vec<String>,
 }
 
+impl TemplateArgs {
+    /// template will turn the TemplateArgs into a Template when given
+    /// the environment it should be executing from.
+    pub fn template<E: Environment>(&self, env: E) -> Result<Template> {
+        let tmpl_config = match ConfigCommand::from_file(env.tmpl_path(&self.name)?.as_path()) {
+            Ok(tmpl_config) => tmpl_config,
+            Err(_) => {
+                return Err(anyhow!("env \"{}\" has no template {}", env.name(), &self.name).into())
+            }
+        };
+        debug!("collection config loaded {:#?}", tmpl_config);
+
+        TemplateBuilder::new().config(tmpl_config).build()
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
-pub struct Collection {
+pub struct CollectionConfig {
     #[serde(skip)]
     pub name: String,
 
@@ -41,9 +85,9 @@ pub struct Collection {
     groups: Vec<CollectionGroup>,
 }
 
-impl Collection {
+impl CollectionConfig {
     /// from_file creates a new Collection from a file specified
-    pub fn from_file<P>(path: P) -> Result<Collection>
+    pub fn from_file<P>(path: P) -> Result<CollectionConfig>
     where
         P: AsRef<Path>,
     {
@@ -65,12 +109,12 @@ impl Collection {
 
     // with name takes a name and a toml configuration string and returns
     // a collection
-    pub fn with_name<S, C>(name: S, conf: C) -> Result<Collection>
+    pub fn with_name<S, C>(name: S, conf: C) -> Result<CollectionConfig>
     where
         S: Into<String>,
         C: AsRef<str>,
     {
-        let mut conf: Collection = toml::from_str(conf.as_ref())?;
+        let mut conf: CollectionConfig = toml::from_str(conf.as_ref())?;
         conf.name = name.into();
         Ok(conf)
     }
@@ -82,10 +126,10 @@ impl Collection {
 }
 
 /// Enable a Collection to be a Command
-impl TryFrom<Collection> for Command {
+impl TryFrom<CollectionConfig> for Command {
     type Error = crate::Error;
 
-    fn try_from(value: Collection) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: CollectionConfig) -> std::result::Result<Self, Self::Error> {
         let command = command!()
             .name(&value.name)
             .with_some(value.short_description.as_ref(), Command::about)

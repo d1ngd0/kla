@@ -1,4 +1,4 @@
-use crate::{Error, Expand, Result};
+use crate::{EnvironmentLoader, Error, Expand, Result, Specified};
 use anyhow::Context;
 use serde::Deserialize;
 use std::ffi::OsString;
@@ -138,6 +138,18 @@ impl Config {
             .filter_map(|f| OsString::from(f.path().file_stem()?).into_string().ok());
 
         Ok(Box::new(collections))
+    }
+}
+
+impl EnvironmentLoader<Specified> for &Config {
+    /// load_environment_with_priority will load a Specified environment from the configuration
+    /// and overrides provided.
+    async fn load_environment_with_priority<S, F>(self, env: S, overrides: F) -> Result<Specified>
+    where
+        S: AsRef<str>,
+        F: FnOnce(reqwest::ClientBuilder) -> Result<reqwest::ClientBuilder>,
+    {
+        Specified::from_config_with_priority(env, self, overrides).await
     }
 }
 

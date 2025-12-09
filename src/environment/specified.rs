@@ -2,8 +2,8 @@ use http::Method;
 use reqwest::{Client, ClientBuilder, IntoUrl, RequestBuilder};
 
 use crate::{
-    config::Endpoint, Attributes, Environment, Expand, Opt, OptBaseURLBuilder, Result, SigV4,
-    URLBuilder, WithAttributes,
+    config::Endpoint, Attributes, Config, Environment, Error, Expand, Opt, OptBaseURLBuilder,
+    Result, SigV4, URLBuilder, WithAttributes,
 };
 
 #[derive(Debug, Clone)]
@@ -22,6 +22,43 @@ impl Specified {
     /// to be deserialized into a
     pub async fn new(builder: ClientBuilder, config: &Endpoint) -> Result<Self> {
         Self::new_with_priority(builder, config, |c| Ok(c)).await
+    }
+
+    /// from_config is passed a path to the environment, and the full configuration
+    /// where it will go searching for it and return the associated environment or an error.
+    /// if the environment does not exist we return an error
+    /// the function also allows specifying overrides
+    /// This function also applies the client configurations for the config object itself
+    /// so you don't need to do that
+    pub async fn from_config_with_priority<S, F>(
+        name: S,
+        config: &Config,
+        overrides: F,
+    ) -> Result<Self>
+    where
+        S: AsRef<str>,
+        F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
+    {
+        // here we add the default client configuration, meaning it has the lowest priority
+        // for setting the value. If you create an environment without using this function
+        // you need to add default_client yourself
+        let builder = ClientBuilder::new().with_some_result(
+            config.default_client.as_ref(),
+            ClientBuilder::with_attributes,
+        )?;
+
+        let endpoint = config
+            .environments()
+            .filter(|env| env.name == name.as_ref())
+            .next()
+            .ok_or_else(|| {
+                Error::from(format!(
+                    "environment {} was invalid or not found!",
+                    name.as_ref()
+                ))
+            })?;
+
+        Ok(Specified::new_with_priority(builder, endpoint, overrides).await?)
     }
 
     /// new_with_priority creates a new environment where you get a hook to modify the

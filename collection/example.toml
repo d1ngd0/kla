@@ -10,6 +10,7 @@ This is a much longer description, that will show up when you run `kla bulk exam
 [[arg]]
   name = "author"
   help = "The author you want to look into"
+  required = true
 
 # Here we specify the first group, a group is made up of multiple environments
 # that we want to run a shared template against. All of these environments must
