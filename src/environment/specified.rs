@@ -1,4 +1,5 @@
 use http::Method;
+use log::debug;
 use reqwest::{Client, ClientBuilder, IntoUrl, RequestBuilder};
 
 use crate::{
@@ -39,6 +40,7 @@ impl Specified {
         S: AsRef<str>,
         F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
+        debug!("loading environment {} from config", name.as_ref());
         // here we add the default client configuration, meaning it has the lowest priority
         // for setting the value. If you create an environment without using this function
         // you need to add default_client yourself
@@ -71,6 +73,11 @@ impl Specified {
     where
         F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
+        debug!(
+            "creating new environment from specified config {:#?}",
+            &config
+        );
+
         // here we add the environment level configurations, along with the overrides, this
         // means that the environment specified attributes can be overloaded by the overrides
         // which is often the cli arguments

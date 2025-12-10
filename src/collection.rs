@@ -1,6 +1,4 @@
-use crate::{
-    CachingLoader, CollectedTemplateGroup, CollectionConfig, EnvironmentLoader, Result, Specified,
-};
+use crate::{CollectionConfig, EnvironmentLoader, Result, Specified};
 use clap::ArgMatches;
 use reqwest::ClientBuilder;
 

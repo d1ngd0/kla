@@ -5,7 +5,6 @@ use std::fs::{self, DirEntry};
 
 use http::Method;
 use reqwest::{ClientBuilder, IntoUrl, Request, Response};
-use tokio::runtime::Runtime;
 
 use crate::{Error, Result};
 
@@ -19,7 +18,7 @@ mod caching_loader;
 pub use caching_loader::*;
 
 /// Environment trait
-pub trait Environment: Send + Sync {
+pub trait Environment: Send + Sync + std::fmt::Debug {
     /// request should return a RequestBuilder with any environment specific configurations
     /// already applied. It is expected that the implementation of environment already have
     /// a client created with any environment level specifics applied as well.

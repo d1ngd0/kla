@@ -37,7 +37,7 @@ impl CollectionGroups {
 
         CollectedTemplateGroup {
             index: 0,
-            env_loader: Rc::new(caching_loader),
+            env_loader: Rc::new(RefCell::new(caching_loader)),
             groups: self,
         }
     }
@@ -50,7 +50,7 @@ impl CollectionGroups {
 /// concurrently, one should be entirely exhausted before moving onto the next.
 pub struct CollectedTemplateGroup<'a, L: EnvironmentLoader<Specified> + Copy> {
     index: usize,
-    env_loader: Rc<CachingLoader<Specified, L>>,
+    env_loader: Rc<RefCell<CachingLoader<Specified, L>>>,
     groups: &'a CollectionGroups,
 }
 
@@ -90,7 +90,7 @@ pub struct CollectedEnvironmentGroup<'a, L: EnvironmentLoader<Specified> + Copy>
     index: usize,
     // holds onto the current environmentgroup iterator
     active: Option<EnvironmentGroup<'a, L>>,
-    env_loader: Rc<CachingLoader<Specified, L>>,
+    env_loader: Rc<RefCell<CachingLoader<Specified, L>>>,
     groups: &'a CollectionGroups,
 }
 
@@ -146,7 +146,7 @@ pub struct CollectionGroup {
 /// the next template to ensure execution order.
 pub struct TemplateGroup<'a, L: EnvironmentLoader<Specified> + Copy> {
     index: usize,
-    env_loader: Rc<CachingLoader<Specified, L>>,
+    env_loader: Rc<RefCell<CachingLoader<Specified, L>>>,
     group: &'a CollectionGroup,
 }
 
@@ -189,8 +189,8 @@ impl<'a, L: EnvironmentLoader<Specified> + Copy> Iterator for EnvironmentGroup<'
         let env = self.group.environments.get(self.index)?;
         self.index += 1;
 
-        let mut env_loader = self.env_loader.clone();
-        let env = match env_loader.borrow_mut().load_environment(env) {
+        let loader = &mut *self.env_loader.borrow_mut();
+        let env = match loader.load_environment(env) {
             Ok(env) => env,
             Err(err) => return Some(Err(err)),
         };

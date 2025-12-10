@@ -118,7 +118,8 @@ impl<E: Environment> Deref for CachedEnvironment<E> {
 }
 
 /// implementing the environment trait means this is an environment and can be used
-/// as such
+/// as such, we must implement all methods to ensure the underlying implementation
+/// is used
 impl<T: Environment> Environment for CachedEnvironment<T> {
     fn request<E, M, U>(&self, method: M, url: U) -> Result<reqwest::RequestBuilder>
     where
@@ -135,5 +136,21 @@ impl<T: Environment> Environment for CachedEnvironment<T> {
 
     fn name(&self) -> &String {
         self.env.name()
+    }
+
+    fn template_dir(&self) -> Option<&String> {
+        self.env.template_dir()
+    }
+
+    fn tmpl_path(&self, name: &str) -> Result<std::path::PathBuf> {
+        self.env.tmpl_path(name)
+    }
+
+    fn templates(&self) -> Result<Box<dyn Iterator<Item = String>>> {
+        self.env.templates()
+    }
+
+    fn sign(&self, req: reqwest::Request) -> Result<reqwest::Request> {
+        self.env.sign(req)
     }
 }
