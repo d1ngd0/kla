@@ -21,7 +21,13 @@ All environments are configured in the [Configuration File](002_config.md) like 
 name = "example"
 url = "http://example.com/"
 
-[[environment.settings]]
+[context]
+  # here you can specify anything you want, which will be passed into
+  # every template under the parent variable __env
+  bearer_token = "~/path/to/file.auth"
+  other_context_from_environment = true
+
+[environment.settings]
   # Sets the `User-Agent` header to be used by this client.
   agent = "some value"
 

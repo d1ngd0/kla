@@ -3,6 +3,7 @@ use std::fmt::{Display, Write};
 
 use serde::Deserialize;
 use skim::SkimItem;
+use tera::Value;
 
 use crate::config::Attributes;
 
@@ -46,6 +47,8 @@ pub struct Endpoint {
     pub sigv4_aws_profile: Option<String>,
     #[serde(rename = "sigv4_aws_service")]
     pub sigv4_aws_service: Option<String>,
+    #[serde(rename = "context", default)]
+    pub context: Value,
 }
 
 impl Display for Endpoint {

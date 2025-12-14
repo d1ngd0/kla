@@ -1,6 +1,7 @@
 use http::Method;
 use log::debug;
 use reqwest::{Client, ClientBuilder, IntoUrl, RequestBuilder};
+use tera::Value;
 
 use crate::{
     config::Endpoint, Attributes, Config, Environment, Error, Expand, Opt, OptBaseURLBuilder,
@@ -16,6 +17,7 @@ pub struct Specified {
     attr: Option<Attributes>,
     tmpl_dir: Option<String>,
     aws_sigv4: Option<SigV4>,
+    context: Value,
 }
 
 impl Specified {
@@ -110,6 +112,7 @@ impl Specified {
         Ok(Self {
             name: config.name.clone(),
             attr: config.attr.clone(),
+            context: config.context.clone(),
             client: b.build()?,
             url_builder: OptBaseURLBuilder::some_new(prefix),
             tmpl_dir: config.template_dir.as_ref().map(<&String>::shell_expansion),
@@ -153,8 +156,7 @@ impl Environment for Specified {
 
     fn context(&self, context: tera::Context) -> Result<tera::Context> {
         let mut context = context;
-        context.insert("__env_name", self.name());
-        context.insert("__env_settings", &self.attr);
+        context.insert("__env", &self.context);
         Ok(context)
     }
 
