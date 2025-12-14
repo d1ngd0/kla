@@ -5,8 +5,8 @@ use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
     clap::{arg_file_value, arg_file_writer, DefaultValueIfSome},
     config::{Config, ConfigCommand},
-    CollectionBuilder, CollectionConfig, Environment, KlaClientBuilder, KlaRequestBuilder, Opt,
-    Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
+    AsyncOption, CollectionBuilder, CollectionConfig, Environment, KlaClientBuilder,
+    KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
 };
 use log::{debug, error, info, trace, LevelFilter};
 use regex::Regex;
@@ -140,6 +140,22 @@ pub fn args_client<'a>(
 
 #[tokio::main]
 async fn main() {
+    // Set up the verbosity of the application right away
+    let m = command!().arg(
+            arg!(-v --verbose "-v Warning, -vv Info, -vvv Debug, -vvvv Trace; not specified logs Error")
+            .action(ArgAction::Count)
+        ).allow_external_subcommands(true)
+        .get_matches();
+
+    colog::basic_builder()
+        .filter_level(match m.get_count("verbose") {
+            0 => LevelFilter::Warn,
+            1 => LevelFilter::Info,
+            2 => LevelFilter::Debug,
+            _ => LevelFilter::Trace,
+        })
+        .init();
+
     match run().await {
         Ok(_) => (),
         Err(err) => error!(
@@ -215,15 +231,6 @@ async fn run() -> Result<(), anyhow::Error> {
             .arg(arg!(-h --help "Show the help text for collection or collection directory")),
         )
         .get_matches();
-
-    colog::basic_builder()
-        .filter_level(match m.get_count("verbose") {
-            0 => LevelFilter::Warn,
-            1 => LevelFilter::Info,
-            2 => LevelFilter::Debug,
-            _ => LevelFilter::Trace,
-        })
-        .init();
 
     match m.subcommand() {
         Some(("environments", envs)) => run_environments(envs, &config),
@@ -350,36 +357,18 @@ async fn run_run<S: Into<String>>(
         )
         .await?;
 
-    let mut writer = match output.is_success() {
-        true => {
-            let writer = arg_file_writer(tmpl_config.output.as_ref(), "output")
-                .await
-                .transpose()?;
-
-            if let Some(writer) = writer {
-                writer
-            } else {
-                arg_file_writer(args.get_one::<String>("output"), "output")
-                    .await
-                    .transpose()?
-                    .unwrap_or_else(|| Box::pin(tokio::io::stdout()))
-            }
-        }
-        false => {
-            let writer = arg_file_writer(tmpl_config.output.as_ref(), "output_failure")
-                .await
-                .transpose()?;
-
-            if let Some(writer) = writer {
-                writer
-            } else {
-                arg_file_writer(args.get_one::<String>("output-failure"), "output-failure")
-                    .await
-                    .transpose()?
-                    .unwrap_or_else(|| Box::pin(tokio::io::stdout()))
-            }
-        }
-    };
+    let mut writer = arg_file_writer(output.desired_location(), "output")
+        .await
+        .async_or_else(async || {
+            let argument = match output.is_success() {
+                true => "output",
+                false => "output-failure",
+            };
+            arg_file_writer(args.get_one::<String>(argument), argument).await
+        })
+        .await
+        .transpose()?
+        .unwrap_or_else(|| Box::pin(tokio::io::stdout()));
 
     output.copy(&mut writer).await?;
 

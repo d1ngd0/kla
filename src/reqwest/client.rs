@@ -1,3 +1,4 @@
+use crate::clap::arg_file_value;
 use crate::{impl_opt, impl_when, Error, Result};
 
 use duration_string::DurationString;
@@ -68,18 +69,22 @@ impl KlaClientBuilder for ClientBuilder {
     }
 
     fn opt_proxy(self, proxy: Option<&String>, userpass: Option<&String>) -> Result<ClientBuilder> {
-        if let None = proxy {
+        let proxy = if let Some(proxy) = proxy {
+            reqwest::Proxy::all(proxy)?
+        } else {
             return Ok(self);
+        };
+
+        match arg_file_value(userpass, "proxy_auth")? {
+            Some(userpass) => {
+                let mut parts = userpass.splitn(2, ":");
+
+                Ok(self.proxy(
+                    proxy.basic_auth(parts.next().unwrap(), parts.next().unwrap_or_default()),
+                ))
+            }
+            None => Ok(self.proxy(proxy)),
         }
-
-        let proxy = reqwest::Proxy::all(proxy.unwrap())?;
-        if let None = userpass {
-            return Ok(self.proxy(proxy));
-        }
-
-        let mut parts = userpass.unwrap().splitn(2, ":");
-
-        Ok(self.proxy(proxy.basic_auth(parts.next().unwrap(), parts.next().unwrap_or_default())))
     }
 
     fn opt_proxy_http(

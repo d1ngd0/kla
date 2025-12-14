@@ -1,3 +1,5 @@
+use std::future::Future;
+
 pub trait Opt: Sized {
     /// Error is the error which will be returned by with_some_result
     type Error;
@@ -154,4 +156,31 @@ macro_rules! impl_ok {
             }
         }
     };
+}
+
+// Enables you to use async_or_else, so an async function that gives you an or_else
+// function
+pub trait AsyncOption {
+    type Output;
+
+    #[allow(async_fn_in_trait)]
+    async fn async_or_else<F, Fut>(self, f: F) -> Option<Self::Output>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Option<Self::Output>>;
+}
+
+impl<T> AsyncOption for Option<T> {
+    type Output = T;
+
+    async fn async_or_else<F, Fut>(self, f: F) -> Option<Self::Output>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Option<Self::Output>>,
+    {
+        match self {
+            x @ Some(_) => x,
+            None => f().await,
+        }
+    }
 }

@@ -150,6 +150,10 @@ impl<T: Environment> Environment for CachedEnvironment<T> {
         self.env.templates()
     }
 
+    fn context(&self, context: tera::Context) -> Result<tera::Context> {
+        self.env.context(context)
+    }
+
     fn sign(&self, req: reqwest::Request) -> Result<reqwest::Request> {
         self.env.sign(req)
     }

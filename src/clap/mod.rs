@@ -28,36 +28,57 @@ impl DefaultValueIfSome for Arg {
 /// or just take the literal value. The function checks for a prefix which defines how
 /// we treat the incoming value
 /// `-` => Read from standard input
-/// `@` => Read from file (followed by a path `@/tmp/myfile.txt`)
+/// `@` => Read from file (followed by a path `@/tmp/myfile.txt`), if the file doesn't
+///        exist we return None
+/// `!` => Read from file (followed by a path `!/tmp/myfile.txt`), if the files doesn't
+///        exists return an error
+/// ``
 ///
 /// else: Take the literal value
 pub fn arg_file_value(val: Option<&String>, name: &str) -> Result<Option<String>, anyhow::Error> {
-    val.map(|val| match val.chars().nth(0) {
+    let val = if let Some(val) = val {
+        val
+    } else {
+        return Ok(None);
+    };
+
+    let val = match val.chars().nth(0) {
         Some('-') => {
             debug!("read {} from standard in", name);
-            io::read_to_string(io::stdin())
+            Some(
+                io::read_to_string(io::stdin())
+                    .with_context(|| format!("could not read {} from standard in", name))?,
+            )
+        }
+        Some('!') => {
+            let filename = val
+                .strip_prefix("!")
+                .expect("the prefix and the matching arm must match for this to work")
+                .shell_expansion();
+            debug!("reading {} from contents of file {}", name, filename);
+            Some(fs::read_to_string(filename.as_str()).with_context(|| {
+                format!("could not read {} from file {}", name, filename.as_str())
+            })?)
         }
         Some('@') => {
             let filename = val
                 .strip_prefix("@")
                 .expect("the prefix and the matching arm must match for this to work")
                 .shell_expansion();
-            debug!("reading {} from contents of file {}", name, filename);
-            fs::read_to_string(filename)
+            debug!(
+                "reading {} from contents of file {}",
+                name,
+                filename.as_str()
+            );
+            fs::read_to_string(filename.as_str()).ok()
         }
         _ => {
             debug!("reading {} as literal", name);
-            Ok(val.into())
+            Some(val.into())
         }
-    })
-    .transpose()
-    .with_context(|| {
-        format!(
-            "could not read {} from input {}",
-            name,
-            val.map(|v| v.as_str()).unwrap_or_default()
-        )
-    })
+    };
+
+    Ok(val)
 }
 
 pub async fn arg_file_writer(

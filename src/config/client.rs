@@ -1,9 +1,9 @@
 use crate::{clap::arg_file_value, KlaClientBuilder, KlaRequestBuilder, Opt, Result, When};
 use anyhow::Context;
 use reqwest::{redirect::Policy, ClientBuilder, RequestBuilder};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 /// Attributes specify settings which can be configured
 pub struct Attributes {
     agent: Option<String>,

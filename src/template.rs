@@ -3,7 +3,7 @@ use std::iter;
 
 use anyhow::Context as _;
 use clap::{ArgMatches, Command};
-use log::info;
+use log::{debug, info};
 use reqwest::{RequestBuilder, Response};
 use tera::{Context, Tera};
 
@@ -135,6 +135,15 @@ impl Template {
                 .args_context(args)
                 .context("Invalid Arguments Supplied")?,
         );
+
+        let context = env.context(context).with_context(|| {
+            format!(
+                "could not set context value from environment {}",
+                env.name()
+            )
+        })?;
+
+        debug!("Context for template {:#?}", &context);
 
         // TODO: Think through these, they should be applied in the following order
         // - Environment specific configuration
@@ -288,6 +297,18 @@ impl Template {
                 false => self.config.template_failure.as_ref(),
             }, OutputBuilder::template)
         .with_context(|| format!("Your request was sent but the output or failure-template within could not be parsed, run with -v to see if your request was successful"))?
+        .with_some(self.tmpl
+                    .render(match succeed {
+                        true => "output",
+                        false => "output_failure",
+                    }, &context)
+                    .map(|v| Some(v))
+                    .or_else(|err| match err.kind {
+                        tera::ErrorKind::TemplateNotFound(_) => Ok(None),
+                        _ => Err(err),
+                    })
+                    .with_context(|| format!("could not render body template"))?,
+                OutputBuilder::desired_location)
         .with_some_result(match succeed {
             true => args.get_one::<String>("template"),
             false => args.get_one::<String>("failure-template"),

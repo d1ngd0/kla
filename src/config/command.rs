@@ -130,6 +130,10 @@ impl ConfigCommand {
         templates.push(("uri".into(), &self.uri));
         templates.push(("method".into(), &self.method));
 
+        if let Some(output) = &self.output {
+            templates.push(("output".into(), output));
+        }
+
         for header in &self.header {
             templates.push((format!("header.{}", header.name), &header.value));
         }

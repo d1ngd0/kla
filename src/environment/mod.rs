@@ -5,6 +5,7 @@ use std::fs::{self, DirEntry};
 
 use http::Method;
 use reqwest::{ClientBuilder, IntoUrl, Request, Response};
+use tera::Context;
 
 use crate::{Error, Result};
 
@@ -84,6 +85,12 @@ pub trait Environment: Send + Sync + std::fmt::Debug {
     /// request with the default implementation.
     fn sign(&self, req: Request) -> Result<Request> {
         Ok(req)
+    }
+
+    /// context will take a context and add additional context to it from the
+    /// environment.
+    fn context(&self, context: Context) -> Result<Context> {
+        Ok(context)
     }
 }
 

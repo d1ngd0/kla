@@ -156,6 +156,13 @@ impl Environment for Optional {
             Optional::Unspecified(unspecified) => unspecified.sign(req),
         }
     }
+
+    fn context(&self, context: tera::Context) -> Result<tera::Context> {
+        match self {
+            Optional::Specified(specified) => specified.context(context),
+            Optional::Unspecified(unspecified) => unspecified.context(context),
+        }
+    }
 }
 
 impl Default for Optional {

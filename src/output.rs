@@ -11,6 +11,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 pub struct OutputBuilder {
     // tmpl holds all the templates
     tmpl: Tera,
+    desired_location: Option<String>,
 }
 
 impl OutputBuilder {
@@ -19,6 +20,7 @@ impl OutputBuilder {
     pub fn new() -> Self {
         OutputBuilder {
             tmpl: Tera::default(),
+            desired_location: None,
         }
     }
 
@@ -28,11 +30,21 @@ impl OutputBuilder {
         Ok(self)
     }
 
+    // desired_location specifies where the user has specified they want the output
+    // to be sent
+    pub fn desired_location(mut self, output: String) -> Self {
+        self.desired_location = Some(output);
+        self
+    }
+
     // build creates the output
     // TODO: We need to set context from arguments here as well so
     // args can manipulate the output template
     pub async fn build(self, response: Response) -> Result<Output> {
-        let OutputBuilder { tmpl } = self;
+        let OutputBuilder {
+            tmpl,
+            desired_location,
+        } = self;
         let headers = response.headers().clone();
         let status = response.status();
 
@@ -54,6 +66,7 @@ impl OutputBuilder {
         Ok(Output {
             status,
             headers,
+            desired_location,
             content,
         })
     }
@@ -63,6 +76,7 @@ impl OutputBuilder {
 pub struct Output {
     status: StatusCode,
     headers: HeaderMap<HeaderValue>,
+    desired_location: Option<String>,
     content: OutputContent,
 }
 
@@ -73,6 +87,10 @@ impl Output {
 
     pub fn headers(&self) -> &HeaderMap<HeaderValue> {
         &self.headers
+    }
+
+    pub fn desired_location(&self) -> Option<&String> {
+        self.desired_location.as_ref()
     }
 
     pub async fn copy<'a, W>(self, writer: &'a mut W) -> tokio::io::Result<u64>

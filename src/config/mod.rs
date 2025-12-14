@@ -1,5 +1,6 @@
 use crate::{EnvironmentLoader, Error, Expand, Result, Specified};
 use anyhow::Context;
+use log::info;
 use serde::Deserialize;
 use std::ffi::OsString;
 use std::fs::DirEntry;
@@ -44,7 +45,8 @@ impl Config {
         let mut config = fs::read_to_string(path.as_ref())
             .with_context(|| format!("could not read file {:?}", path.as_ref()))
             .and_then(|content| {
-                toml::from_str::<Config>(&content).with_context(|| format!("could not parse toml"))
+                toml::from_str::<Config>(&content)
+                    .with_context(|| format!("could not parse toml from {:?}", path.as_ref()))
             })?;
 
         let sub_configs = config
@@ -70,6 +72,7 @@ impl Config {
             .map(|s| s.as_ref().shell_expansion())
             .filter(|f| Path::new(f).exists())
             .next()
+            .inspect(|v| info!("Loading config file {}", v))
             .ok_or(anyhow::Error::msg("No valid config file found"))
             .and_then(|filename| {
                 Self::from_path(filename.as_str())

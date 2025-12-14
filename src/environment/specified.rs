@@ -151,6 +151,13 @@ impl Environment for Specified {
         }
     }
 
+    fn context(&self, context: tera::Context) -> Result<tera::Context> {
+        let mut context = context;
+        context.insert("__env_name", self.name());
+        context.insert("__env_settings", &self.attr);
+        Ok(context)
+    }
+
     async fn execute(&self, request: reqwest::Request) -> Result<reqwest::Response> {
         self.client
             .execute(request)
