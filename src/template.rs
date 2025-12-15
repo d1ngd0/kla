@@ -11,7 +11,7 @@ use crate::clap::arg_file_value;
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
     Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, Output, OutputBuilder, Result,
-    Sigv4Request,
+    Sigv4Request, WithAttributes,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -164,19 +164,7 @@ impl Template {
                     .render("uri", &context)
                     .with_context(|| format!("could not render uri template"))?,
             )?
-            .opt_timeout(self.config.timeout.as_ref())?
-            .opt_version(self.config.http_version.as_ref())?
-            .with_some(
-                arg_file_value(self.config.bearer_token.as_ref(), "bearer_token")?,
-                RequestBuilder::bearer_auth,
-            )
-            .with_some(
-                arg_file_value(self.config.basic_auth.as_ref(), "basic_auth")?,
-                |b, basic_auth| {
-                    let mut parts = basic_auth.splitn(2, ":");
-                    b.basic_auth(parts.next().unwrap(), parts.next())
-                },
-            )
+            .with_some_result(self.config.attr.as_ref(), RequestBuilder::with_attributes)?
             .with_some(
                 self.tmpl
                     .render("body", &context)

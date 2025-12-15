@@ -382,10 +382,33 @@ The server failed with the following message:
 # output specifies where you would like the output of this template to go
 # usually you want it to go to stdout, which it does by default, but for
 # login endpoints maybe you want to direct things towards a file?
+# this value supports templating
 output = "~/.cache/my_token"
 
 # Additionally, you might want to redirect the failure output somewhere
 # else, especially if you don't want it to go to where you specified `output`
 # `-` means standard out
+# this value supports templating
 failure_output = "-"
+
+# Settings allow you to specify request level settings for the template.
+[settings]
+# allows you to specify the bearer token header. based on the first character
+# this settings can read from a file
+# `-` => Read from standard input
+# `@` => Read from file (followed by a path `@/tmp/myfile.txt`), if the file doesn't
+#        exist we do not set the value
+# `!` => Read from file (followed by a path `!/tmp/myfile.txt`), if the files doesn't
+#        exists return an error
+# .*  => Read anything else in as the literal value
+bearer_token = ""
+
+# set the basic auth header. This has the same feature set as bearer_token
+basic_auth = ""
+
+# Timeout, configuration defined by https://docs.rs/duration-string/latest/duration_string/index.html
+timeout = "10s"
+
+# Set the HTTP Version, allowed versions are: 0.9, 1.0, 1.1, 2.0, 3.0.
+http_version = "1.0"
 ```

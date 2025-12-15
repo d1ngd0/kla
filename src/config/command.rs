@@ -6,7 +6,7 @@ use inquire::Password;
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
-use crate::{Ok, Opt, RenderGroup};
+use crate::{Attributes, Ok, Opt, RenderGroup};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
@@ -44,11 +44,8 @@ pub struct ConfigCommand {
     pub output: Option<String>,
     #[serde(rename = "output_failure")]
     pub output_failure: Option<String>,
-
-    pub timeout: Option<String>,
-    pub http_version: Option<String>,
-    pub bearer_token: Option<String>,
-    pub basic_auth: Option<String>,
+    #[serde(rename = "settings")]
+    pub attr: Option<Attributes>,
 }
 
 // default_uri specifies the default uri when one is not supplied
