@@ -140,22 +140,6 @@ pub fn args_client<'a>(
 
 #[tokio::main]
 async fn main() {
-    // Set up the verbosity of the application right away
-    let m = command!().arg(
-            arg!(-v --verbose "-v Warning, -vv Info, -vvv Debug, -vvvv Trace; not specified logs Error")
-            .action(ArgAction::Count)
-        ).allow_external_subcommands(true)
-        .get_matches();
-
-    colog::basic_builder()
-        .filter_level(match m.get_count("verbose") {
-            0 => LevelFilter::Warn,
-            1 => LevelFilter::Info,
-            2 => LevelFilter::Debug,
-            _ => LevelFilter::Trace,
-        })
-        .init();
-
     match run().await {
         Ok(_) => (),
         Err(err) => error!(
@@ -179,14 +163,6 @@ async fn run() -> Result<(), anyhow::Error> {
         ]
         .iter(),
     )?;
-
-    // let conf = Config::builder()
-    //     .add_source(File::new(&config_file, FileFormat::Toml))
-    //     .set_default("default.environment", "/etc/kla/.default-environment")?
-    //     .build()
-    //     .with_context(|| format!("could not load configuration"))?
-    //     .merge_children("config")
-    //     .context("could not load [[config]] files")?;
 
     // if the config file has a default environment we want to store it in a static
     // variable so it can be used everywhere
@@ -231,6 +207,15 @@ async fn run() -> Result<(), anyhow::Error> {
             .arg(arg!(-h --help "Show the help text for collection or collection directory")),
         )
         .get_matches();
+
+    colog::basic_builder()
+        .filter_level(match m.get_count("verbose") {
+            0 => LevelFilter::Warn,
+            1 => LevelFilter::Info,
+            2 => LevelFilter::Debug,
+            _ => LevelFilter::Trace,
+        })
+        .init();
 
     match m.subcommand() {
         Some(("environments", envs)) => run_environments(envs, &config),
