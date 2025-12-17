@@ -9,13 +9,6 @@ This was your argument: {{ argument }}
 """
 uri = "/"
 
-# subcommands are commands that will be loaded under the current one. It is important
-# that you do not put the subcommand in the root of the template directory, or it will show up
-# both at the root and as a subcommand.
-subcommands = [
-    "tmpl/example/subcommand.toml"
-]
-
 [[arg]]
 name = "argument"
 short = 'a'

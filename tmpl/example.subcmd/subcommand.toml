@@ -1,0 +1,20 @@
+short_description = "An example of a subcommand... It looks just like a normal command"
+description = """
+An example of a subcommand... It looks just like a normal command
+
+Subcommands are stored in a directory of the same name of the command, with `.subcmd` appended. As an example, this template is defined in the root directory thus:
+
+```bash
+# Root template directory
+/tmpl
+# this is the parent command
+/tmpl/example.toml   
+# the directory which holds subcommands
+/tmpl/example.subcmd 
+# subcommands 
+/tmpl/example.subcmd/subcommand_1.toml
+/tmpl/example.subcmd/subcommand_2.toml
+/tmpl/example.subcmd/subcommand_3.toml
+```
+"""
+uri = "/subcommand"

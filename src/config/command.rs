@@ -1,4 +1,8 @@
-use std::{fs, ops::Deref, path::Path};
+use std::{
+    fs::{self, DirEntry},
+    ops::Deref,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context as _;
 use clap::{command, Arg, ArgAction, ArgMatches, Command};
@@ -6,12 +10,14 @@ use inquire::Password;
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
-use crate::{Attributes, Expand, Ok, Opt, RenderGroup};
+use crate::{Attributes, Ok, Opt, RenderGroup};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
     #[serde(skip)]
     pub name: String,
+    #[serde(skip)]
+    pub subcommands: Vec<ConfigCommand>,
 
     #[serde(rename = "short_description")]
     short_description: Option<String>,
@@ -46,8 +52,6 @@ pub struct ConfigCommand {
     pub output_failure: Option<String>,
     #[serde(rename = "settings")]
     pub attr: Option<Attributes>,
-    #[serde(rename = "subcommands", default)]
-    pub subcommands: Vec<String>,
 }
 
 // default_uri specifies the default uri when one is not supplied
@@ -106,7 +110,39 @@ impl ConfigCommand {
                 ))
             })?;
         let content = fs::read_to_string(path.as_ref())?;
-        Self::with_name(name, content)
+        let config = Self::with_name(name, content)?;
+
+        // create the directory name for subcommands
+        // and set the value to `Some` if the directory
+        // exists
+        let subcmd_dir = path
+            .as_ref()
+            .parent()
+            .map(PathBuf::from)
+            .map(|mut v| {
+                v.push(format!("{}.subcmd", name));
+                v
+            })
+            .filter(|path| path.is_dir());
+
+        if let Some(subcmd_dir) = subcmd_dir {
+            config.with_subcommands(subcmd_dir)
+        } else {
+            Ok(config)
+        }
+    }
+
+    fn with_subcommands<P: AsRef<Path>>(self, path: P) -> Result<Self, crate::Error> {
+        let mut config = self;
+        config.subcommands = fs::read_dir(path.as_ref())
+            .with_context(|| format!("could not read template directory {:?}", path.as_ref()))?
+            .collect::<std::result::Result<Vec<DirEntry>, std::io::Error>>()?
+            .into_iter()
+            .filter(|f| f.file_type().map(|v| v.is_file()).unwrap_or(false))
+            .map(|v| ConfigCommand::from_file(v.path()))
+            .collect::<crate::Result<Vec<ConfigCommand>>>()?;
+
+        Ok(config)
     }
 
     pub fn with_name<S, C>(name: S, conf: C) -> std::result::Result<ConfigCommand, crate::Error>
@@ -166,14 +202,9 @@ impl TryFrom<ConfigCommand> for Command {
             .with_context(|| format!("{} invalid command configuration", &value.name))?;
 
         // Add the subcommands
-        for subcommand in &value.subcommands {
-            let subcommand = ConfigCommand::from_file(subcommand.shell_expansion())
-                .with_context(|| format!("could not load subcommand {}", subcommand))
-                .map_err(Self::Error::from)
-                .and_then(|subcommand| Command::try_from(subcommand))
-                .with_context(|| {
-                    format!("configuration from {} is not a valid command", subcommand)
-                })?;
+        for config in value.subcommands {
+            let subcommand = Command::try_from(config)
+                .with_context(|| format!("subcommand of {}", &value.name))?;
             command = command.subcommand(subcommand);
         }
 

@@ -1,7 +1,0 @@
-short_description = "An example of a subcommand... It looks just like a normal command"
-description = """
-An example of a subcommand... It looks just like a normal command
-
-What else is there to say... it works and it's great
-"""
-uri = "/subcommand"
