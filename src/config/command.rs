@@ -6,7 +6,7 @@ use inquire::Password;
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
-use crate::{Attributes, Ok, Opt, RenderGroup};
+use crate::{Attributes, Expand, Ok, Opt, RenderGroup};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
@@ -46,6 +46,8 @@ pub struct ConfigCommand {
     pub output_failure: Option<String>,
     #[serde(rename = "settings")]
     pub attr: Option<Attributes>,
+    #[serde(rename = "subcommands", default)]
+    pub subcommands: Vec<String>,
 }
 
 // default_uri specifies the default uri when one is not supplied
@@ -156,12 +158,24 @@ impl TryFrom<ConfigCommand> for Command {
     type Error = crate::Error;
 
     fn try_from(value: ConfigCommand) -> Result<Self, Self::Error> {
-        let command = command!()
+        let mut command = command!()
             .name(&value.name)
             .with_some(value.short_description.as_ref(), Command::about)
             .with_some(value.description.as_ref(), Command::long_about)
             .with_ok_value(<Vec<Arg>>::try_from(value.args), Command::args)
             .with_context(|| format!("{} invalid command configuration", &value.name))?;
+
+        // Add the subcommands
+        for subcommand in &value.subcommands {
+            let subcommand = ConfigCommand::from_file(subcommand.shell_expansion())
+                .with_context(|| format!("could not load subcommand {}", subcommand))
+                .map_err(Self::Error::from)
+                .and_then(|subcommand| Command::try_from(subcommand))
+                .with_context(|| {
+                    format!("configuration from {} is not a valid command", subcommand)
+                })?;
+            command = command.subcommand(subcommand);
+        }
 
         Ok(command)
     }
