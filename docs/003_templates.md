@@ -123,7 +123,7 @@ kla run doc 233 --format yaml
 
 The `when` operator will add the query parameter when it has a non empty value.. so `yes` could have also been `four score and blah blah blah`.
 
-# Configuration
+## Configuration
 
 Alright, here is the full configuration available to you now that you are familiarized with things.
 
@@ -412,3 +412,17 @@ timeout = "10s"
 # Set the HTTP Version, allowed versions are: 0.9, 1.0, 1.1, 2.0, 3.0.
 http_version = "1.0"
 ```
+
+## Sub Commands
+
+Each template allows for subcommands, these commands are stored in a subdirectory where the template is with `.subcmd` appended to the end of the name. For instance take the following directory:
+
+```
+/tmpls
+├ config.toml
+└ config.subcmd
+  ├ set.toml
+  └ get.toml 
+```
+
+The `config.toml` is the parent command, which will load in all the subcommands from `config.subcmd`. These subcommands share the exact same configurations themselves, and can even have their own subcommands!
