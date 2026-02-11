@@ -327,17 +327,38 @@ async fn run_run<S: Into<String>>(
         )
         .get_matches();
 
+    // We need to find the leaf node of the command, if we are calling the root we
+    // will set these and never loop. Otherwise we will traverse down by updating these
+    // until we find the leaf
+    let mut subcommand = m
+        .subcommand()
+        .expect("only run in run")
+        .1
+        .subcommand()
+        .expect("only run with template")
+        .1;
+    let mut subcommand_config = &tmpl_config;
+
+    // time to loop down
+    loop {
+        if let Some(tmp) = subcommand.subcommand() {
+            subcommand = tmp.1;
+            subcommand_config = subcommand_config
+                .subcommands
+                .iter()
+                .find(|i| i.name == tmp.0)
+                .expect("help would have fired if we couldn't find this")
+        } else {
+            break;
+        }
+    }
+
     let output = TemplateBuilder::new()
-        .config(tmpl_config.clone())
+        .config(subcommand_config.clone())
         .build()?
         .run(
             &env,
-            m.subcommand()
-                .expect("only run in run")
-                .1
-                .subcommand()
-                .expect("only run with template")
-                .1,
+            subcommand,
             args.get_one("dry").map(|b| *b).unwrap_or_default(),
         )
         .await?;

@@ -185,6 +185,7 @@ impl SubConfig {
                 let entries = entries
                     .map(|entry| entry.map_err(crate::Error::from))
                     .filter(|f| match f.as_ref() {
+                        // you need to check and make sure it is toml here
                         Ok(entry) => entry.file_type().map(|t| t.is_file()).unwrap_or(false),
                         Err(_) => true,
                     })
