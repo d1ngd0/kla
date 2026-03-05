@@ -156,7 +156,7 @@ async fn main() {
 async fn run() -> Result<(), anyhow::Error> {
     let config = Config::from_list(
         [
-            "config.toml",
+            "kla.toml",
             "~/.kla.toml",
             "~/.config/kla/config.toml",
             "/etc/kla/config.toml",

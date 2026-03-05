@@ -2,7 +2,7 @@
 
 Kla searches for the "main" configuration file in the following places:
 
-- `config.toml`
+- `./kla.toml`
 - `~/.kla.toml`
 - `~/.config/kla/config.toml` _preferred_
 - `/etc/kla/config.toml`
