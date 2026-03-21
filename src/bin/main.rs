@@ -75,6 +75,10 @@ You should think very carefully before you use this method. If hostname verifica
             .alias("context")
             .arg(arg!(matcher: [Matcher] "A regex statement to filter down matches, (if we only match one value it's selected)").required(false).default_value(".*"))
         )
+        .subcommand(
+            Command::new("environment")
+            .alias("env")
+        )
 }
 
 /// args_client parses the flags from the user and applies them to the client builder.
@@ -224,6 +228,7 @@ async fn run() -> Result<(), anyhow::Error> {
         Some(("bulk", envs)) => {
             run_collection(envs.get_one::<String>("collection"), &m, &config).await
         }
+        Some(("environment", envs)) => run_environment(envs, &config),
         _ => run_root(&m, &config).await,
     }
 }
@@ -530,18 +535,6 @@ fn run_switch(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
 
 // run_root will run the command with no arguments
 async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
-    let env =
-        Optional::from_config_with_priority(args.get_one::<String>("env"), conf, args_client(args))
-            .await
-            .with_context(|| {
-                format!(
-                    "could not load environment: {:?}",
-                    args.get_one::<String>("env")
-                )
-            })?;
-    info!("Environment: {}", env.name());
-    debug!("{:#?}", env);
-
     let (uri, method) = if let Some(uri) = args.get_one::<String>("url") {
         (
             uri,
@@ -555,7 +548,31 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
             "GET".into(),
         )
     };
-    info!("uri request [{}] {}", method, uri);
+
+    // check if the beginning of the uri is an environment or not. If the url
+    // does not begin with `/` then we should assume the firsts value is the
+    // environment name, and not a url. When specifying --env this value gets
+    // ignored
+    debug!("specified uri {:?}", uri);
+    let (env, uri) = match uri.get(0..1) {
+        Some("/") => (None, uri.clone()),
+        Some(_) => {
+            let mut parts = uri.splitn(2, "/");
+            (
+                parts.next().map(String::from),
+                parts.next().map(String::from).unwrap_or(String::from("/")),
+            )
+        }
+        None => (None, uri.clone()),
+    };
+    debug!("extracted environment: {:?}", env);
+
+    let env_string = env.as_ref().or_else(|| args.get_one::<String>("env"));
+    let env = Optional::from_config_with_priority(env_string, conf, args_client(args))
+        .await
+        .with_context(|| format!("could not load environment: {:?}", env_string))?;
+    info!("Environment: {}", env.name());
+    info!("uri request <{:?}> [{}] {}", env, method, uri);
 
     let request = env
         .request(method.as_str(), uri)?
@@ -656,6 +673,19 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     };
 
     output.copy(&mut writer).await?;
+
+    Ok(())
+}
+
+// run_environment prints the current default environment selected for kla
+fn run_environment(_args: &ArgMatches, _conf: &Config) -> Result<(), anyhow::Error> {
+    println!(
+        "{}",
+        DEFAULT_ENV
+            .get()
+            .map(|v| v.as_os_str().to_string_lossy())
+            .unwrap_or_default()
+    );
 
     Ok(())
 }

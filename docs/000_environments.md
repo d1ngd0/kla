@@ -103,7 +103,7 @@ You might not totally remember what you named the environment, and that is OK. R
 
 ## Seeing your environments
 
-You can see all of your current environments with `kla environments`.
+You can see all of your current environments with `kla environments`. You can see your current environment with `kla env`.
 
 ## Explicitly specifying your environment
 

@@ -46,3 +46,32 @@ cat /tmp/my_settings.json | kla post /myindex/_settings '-'
 # specify the contents with a filepath
 kla post /myindex/_settings '@'
 ```
+## Environments
+
+Kla utilizes predefined environments (much like kubectl contexts) to specify what restful endpoint you are working with. There are a few different ways to specify the environment when making a request.
+
+### Explicit Reference
+
+Explicit references use the name of the environment as the first item **without** a preceding `/`. This lets kla know you are specifying the endpoint to use, and not specifying part of the url. This value takes the highest precedence.
+
+```
+$ kla poetry/authors
+```
+
+### Flag Reference
+
+Here you use the `--env` flag to specify the environment you are working with. This takes precedence over implicit, but not over explicit environment specification.
+
+```
+$ kla --env poetry /authors
+```
+
+### Implicit Reference
+
+The final way to specify your environment is by relaying on the currently configured "default environment". You can see what this value is by running `kla env` or `kla environment`. Additionally you can switch between your environments with `kla switch`
+
+```
+$ kla switch
+Switched to environment poetry
+$ kla /authors
+```
