@@ -37,7 +37,8 @@ And that's it! if you run `kla --sigv4 /` the request will be signed using the `
 These settings can be pre-configured for an environment as well!
 
 ```toml
-[environment.ceph]
+[[environment]]
+  name = "ceph"
   url = "http://cephrgw.example.com/admin/"
 
   # Specifies the --sigv4 flag should be enabled signing the http request with

@@ -9,6 +9,8 @@ Kla searches for the "main" configuration file in the following places:
 
 The first file that it finds will be selected and parsed. If there is an error during parsing kla will return that error and stop executing.
 
+Of course if you want to tell kla what config file it should use feel free to pass in the `--config` flag.
+
 ## Additional Configuration Files
 
 Configuration can be broken into multiple files! Your "main" config, **and only your main config**, can specify a `[[config]]` attribute which pulls in additional directories or paths.
@@ -33,6 +35,8 @@ path = "/etc/kla/conf.d"
 
 Specifying both a `dir` and `path` will result in an error, so don't do that. The only difference between your "main" config file and others is that only "main" can have the `[[config]]` attribute, it will be ignored in any merged files.
 
+Relative paths are resolved based on the location of the config file.
+
 ## Available Configurations
 
 Below is a fully inclusive config file, with all the values specified and comments to boot!
@@ -42,7 +46,7 @@ Below is a fully inclusive config file, with all the values specified and commen
 [default]
 # sets the --env flag by default. This value is actually a file since the `switch`
 # subcommand can change this value to switch contexts.
-environment = "~/.default-environment"
+environment = ".default-environment"
 
 # You can specify multiple configuration directories to use at runtime as well. The
 # [[config]] table has two values:
@@ -70,7 +74,7 @@ environment = "~/.default-environment"
 #   my_random_attribute = "something"
 [[config]]
 type = "dir"
-path = "~/.config/kla/conf.d/"
+path = "conf.d/"
 
 # Each environment is specified in it's own environment table with
 # it's name as the key (here "env_name"). It is best practice to break
@@ -97,7 +101,7 @@ A much longer description"""
   # this directory are parsed and turned into subcommands under `kla run`.
   # Checkout https://github.com/d1ngd0/kla/blob/main/docs/003_templates.md for more
   # information on templates specifically.
-  template_dir = "~/.config/kla/tmpls/env_name/"
+  template_dir = "../tmpls/env_name/"
 
   # Specifies the --sigv4 flag should be enabled signing the http request with
   # amazons sigv4 https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html
