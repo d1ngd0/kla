@@ -2,8 +2,11 @@
 default:
     @just --list
 
+# Development helpers
+mod dev
+
 # Default install directory
-install_dir := env_var_or_default("KLA_INSTALL_DIR", "~/.local/bin")
+install_dir := env_var_or_default("KLA_INSTALL_DIR", "${HOME}/.local/bin")
 
 # build and install kla
 install:

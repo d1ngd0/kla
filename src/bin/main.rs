@@ -25,6 +25,7 @@ fn command() -> Command {
         .arg_required_else_help(true)
         .long_about(ROOT_ABOUT)
         .subcommand_required(false)
+        .arg(arg!(--config <CONFIG_FILE> "The configuration file to use"))
         .arg(arg!(--agent <AGENT> "The header agent string").default_value("kla"))
         .arg(arg!(-e --env <ENVIRONMENT> "The environment we will run the request against").required(false).default_value_if_some(DEFAULT_ENV.get().map(|v| v.as_os_str())))
         .arg(arg!(-t --template <TEMPLATE> "The template to use when formating the output. prepending with @ will read a file."))
@@ -158,28 +159,6 @@ async fn main() {
 }
 
 async fn run() -> Result<(), anyhow::Error> {
-    let config = Config::from_list(
-        [
-            "kla.toml",
-            "~/.kla.toml",
-            "~/.config/kla/config.toml",
-            "/etc/kla/config.toml",
-        ]
-        .iter(),
-    )?;
-
-    // if the config file has a default environment we want to store it in a static
-    // variable so it can be used everywhere
-    if let Some(default_environment) = config
-        .default_environment
-        .as_ref()
-        .and_then(|path| fs::read_to_string(path).ok())
-    {
-        DEFAULT_ENV
-            .get_or_init(|| async { OsString::from(default_environment) })
-            .await;
-    }
-
     let m = command()
         .subcommand(
             Command::new("run")
@@ -211,6 +190,32 @@ async fn run() -> Result<(), anyhow::Error> {
             .arg(arg!(-h --help "Show the help text for collection or collection directory")),
         )
         .get_matches();
+
+    let config = if let Some(path) = m.get_one::<String>("config") {
+        Config::from_path(path)?
+    } else {
+        Config::from_list(
+            [
+                "kla.toml",
+                "~/.kla.toml",
+                "~/.config/kla/config.toml",
+                "/etc/kla/config.toml",
+            ]
+            .iter(),
+        )?
+    };
+
+    // if the config file has a default environment we want to store it in a static
+    // variable so it can be used everywhere
+    if let Some(default_environment) = config
+        .default_environment
+        .as_ref()
+        .and_then(|path| fs::read_to_string(path).ok())
+    {
+        DEFAULT_ENV
+            .get_or_init(|| async { OsString::from(default_environment) })
+            .await;
+    }
 
     colog::basic_builder()
         .filter_level(match m.get_count("verbose") {
