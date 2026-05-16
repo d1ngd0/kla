@@ -31,6 +31,8 @@ pub enum Error {
     SigningError(#[from] SigningError),
     #[error("Toml Parse Error {0}")]
     TomlError(#[from] toml::de::Error),
+    #[error("Yaml Parse Error {0}")]
+    YamlError(#[from] serde_yaml_ng::Error),
     #[error("aint never gonna happen")]
     Infallable(#[from] Infallible),
 }

@@ -49,8 +49,15 @@ impl Config {
         let mut config = fs::read_to_string(path.as_ref())
             .with_context(|| format!("could not read file {:?}", path.as_ref()))
             .and_then(|content| {
-                toml::from_str::<Config>(&content)
-                    .with_context(|| format!("could not parse toml from {:?}", path.as_ref()))
+                match path.as_ref().extension().map(|f| f.to_str()).flatten() {
+                    Some("toml") => toml::from_str::<Config>(&content).map_err(Error::from),
+                    Some("yaml") => {
+                        serde_yaml_ng::from_str::<Config>(&content).map_err(Error::from)
+                    }
+                    Some(ext) => Err(Error::from(format!("unsupported extension {}", ext))),
+                    None => Err(Error::from("invalid or no extension on config file")),
+                }
+                .with_context(|| format!("could not parse config from {:?}", path.as_ref()))
             })?;
 
         // Go through all the environments configured and make sure they load relative links
