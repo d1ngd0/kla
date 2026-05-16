@@ -58,5 +58,5 @@ git clone https://github.com/d1ngd0/kla
 # cd into the directory
 cd kla
 # Install it
-make install
+just install
 ```

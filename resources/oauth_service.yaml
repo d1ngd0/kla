@@ -1,0 +1,33 @@
+services:
+  tiny-auth:
+    container_name: tiny-auth
+    image: bytepeddlerllc/tiny-auth:latest
+    environment:
+      ADMIN_CLIENT_ID: admin
+      ADMIN_CLIENT_SECRET: hunter02
+      HOSTNAME: http://localhost:8080
+      ISSUER: http://localhost:8080
+      LOG_LEVEL: debug
+      SEED_FILE: /tmp/seed.yaml
+    ports:
+      - "8080:8080"
+    configs:
+      - source: seed_data
+        target: /tmp/seed.yaml
+configs:
+  seed_data:
+    content: |
+      clients:
+        workflow:
+          secret: workflow1
+          scope: some:scope
+          audience:
+            - something
+      users:
+        ben:
+          password: hunter02
+          name: d1ngd0
+          email: d1ngd0@fake.com
+          picture: https://www.gravatar.com/avatar
+          permissions:
+            - client:read
