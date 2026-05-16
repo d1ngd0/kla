@@ -52,37 +52,7 @@ impl Config {
                 toml::from_str::<Config>(&content)
                     .with_context(|| format!("could not parse toml from {:?}", path.as_ref()))
             })?;
-
-        // Go through all the environments configured and make sure they load relative links
-        // by the directory the config file is in.
-        for env in &mut config.environment {
-            env.template_dir = env.template_dir.take().map(|f| {
-                if f.is_relative() {
-                    PathBuf::from(dir).join(f)
-                } else {
-                    f
-                }
-            });
-        }
-
-        // default environment is also a path, and must have it's relative links made into
-        // absolute links
-        config.default_environment = config.default_environment.take().map(|f| {
-            if f.is_relative() {
-                PathBuf::from(dir).join(f)
-            } else {
-                f
-            }
-        });
-
-        // Finally do the same for collections
-        config.collection_dir = config.collection_dir.take().map(|f| {
-            if f.is_relative() {
-                PathBuf::from(dir).join(f)
-            } else {
-                f
-            }
-        });
+        config.resolve_working_dir(dir);
 
         let sub_configs = config
             .sub_configs
@@ -96,6 +66,39 @@ impl Config {
         }
 
         Ok(config)
+    }
+
+    /// resolve_working_dir finds any relative paths referenced in the config
+    /// and resolves them with `dir` as it's base.
+    pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
+        let dir = dir.as_ref();
+        // Go through all the environments to resolve their working directories
+        for env in &mut self.environment {
+            env.resolve_working_dir(dir);
+        }
+
+        // default environment is also a path, and must have it's relative links made into
+        // absolute links
+        self.default_environment = self.default_environment.take().map(|f| {
+            if f.is_relative() {
+                PathBuf::from(dir).join(f)
+            } else {
+                f
+            }
+        });
+
+        // Finally do the same for collections
+        self.collection_dir = self.collection_dir.take().map(|f| {
+            if f.is_relative() {
+                PathBuf::from(dir).join(f)
+            } else {
+                f
+            }
+        });
+
+        self.default_client
+            .as_mut()
+            .map(|a| a.resolve_working_dir(dir));
     }
 
     pub fn from_list<S, I>(list: I) -> Result<Self>

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use skim::SkimItem;
@@ -50,6 +50,18 @@ pub struct Endpoint {
     pub sigv4_aws_service: Option<String>,
     #[serde(rename = "context", default)]
     pub context: Value,
+}
+
+impl Endpoint {
+    pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
+        self.template_dir = self.template_dir.take().map(|f| {
+            if f.is_relative() {
+                PathBuf::from(dir.as_ref()).join(f)
+            } else {
+                f
+            }
+        });
+    }
 }
 
 impl Display for Endpoint {

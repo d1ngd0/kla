@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{clap::arg_file_value, KlaClientBuilder, KlaRequestBuilder, Opt, Result, When};
 use anyhow::Context;
 use reqwest::{redirect::Policy, ClientBuilder, RequestBuilder};
@@ -30,6 +32,10 @@ pub struct Attributes {
     #[serde(default)]
     certificate: Vec<String>,
     verbose: Option<bool>,
+}
+
+impl Attributes {
+    pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {}
 }
 
 pub trait WithAttributes: Sized {
