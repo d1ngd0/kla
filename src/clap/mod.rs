@@ -35,6 +35,10 @@ impl DefaultValueIfSome for Arg {
 /// ``
 ///
 /// else: Take the literal value
+///
+/// > [!IMPORTANT]
+/// This should only be avaialble int he command line, file paths inside templates should
+/// be relative to the file they are defined in.
 pub fn arg_file_value(val: Option<&String>, name: &str) -> Result<Option<String>, anyhow::Error> {
     let val = if let Some(val) = val {
         val

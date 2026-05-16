@@ -1,8 +1,8 @@
-use crate::clap::arg_file_value;
 use crate::{impl_opt, impl_when, Error, Result};
 
 use duration_string::DurationString;
 use reqwest::{Certificate, ClientBuilder};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::{fs, path::Path, time::Duration};
 
@@ -27,14 +27,14 @@ pub trait KlaClientBuilder {
 
     fn opt_certificate<'a, T>(self, certificates: Option<T>) -> Result<ClientBuilder>
     where
-        T: Iterator<Item = &'a String>;
+        T: Iterator<Item = &'a PathBuf>;
 }
 
 // Implementation of the trait to extend ClientBuilder
 impl KlaClientBuilder for ClientBuilder {
     fn opt_certificate<'a, T>(self, certificates: Option<T>) -> Result<ClientBuilder>
     where
-        T: Iterator<Item = &'a String>,
+        T: Iterator<Item = &'a PathBuf>,
     {
         if let None = certificates {
             return Ok(self);
@@ -59,7 +59,7 @@ impl KlaClientBuilder for ClientBuilder {
                 _ => {
                     return Err(Error::from(format!(
                         "Invalid certificate file extension: {}",
-                        certificate
+                        certificate.to_string_lossy()
                     )))
                 }
             }
@@ -75,7 +75,7 @@ impl KlaClientBuilder for ClientBuilder {
             return Ok(self);
         };
 
-        match arg_file_value(userpass, "proxy_auth")? {
+        match userpass {
             Some(userpass) => {
                 let mut parts = userpass.splitn(2, ":");
 

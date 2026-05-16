@@ -1,7 +1,7 @@
 use std::{
     fs::{self, DirEntry},
     ops::Deref,
-    path::{Path, PathBuf},
+    path::{absolute, Path, PathBuf},
 };
 
 use anyhow::Context as _;
@@ -98,6 +98,10 @@ impl ConfigCommand {
     where
         P: AsRef<Path>,
     {
+        // TODO: Fix this unwrap
+        let dir = absolute(&path.as_ref())?;
+        let dir = dir.parent().unwrap();
+
         let name = path
             .as_ref()
             .file_name()
@@ -110,7 +114,8 @@ impl ConfigCommand {
                 ))
             })?;
         let content = fs::read_to_string(path.as_ref())?;
-        let config = Self::with_name(name, content)?;
+        let mut config = Self::with_name(name, content)?;
+        config.resolve_working_dir(dir);
 
         // create the directory name for subcommands
         // and set the value to `Some` if the directory
@@ -130,6 +135,12 @@ impl ConfigCommand {
         } else {
             Ok(config)
         }
+    }
+
+    /// resolve_working_dir will go through all the fields that are paths
+    /// and resolve them to the provided working dir if they are relative
+    pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
+        self.attr.as_mut().map(|s| s.resolve_working_dir(dir));
     }
 
     fn with_subcommands<P: AsRef<Path>>(self, path: P) -> Result<Self, crate::Error> {

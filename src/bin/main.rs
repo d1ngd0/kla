@@ -111,7 +111,10 @@ pub fn args_client<'a>(
             .when(args.get_raw("accept-invalid-hostnames").is_some(), |b| {
                 b.danger_accept_invalid_hostnames(true)
             })
-            .opt_proxy(args.get_one("proxy"), args.get_one("proxy-auth"))
+            .opt_proxy(
+                args.get_one("proxy"),
+                arg_file_value(args.get_one("proxy-auth"), "proxy-auth")?.as_ref(),
+            )
             .with_context(|| {
                 format!(
                     "could not add proxy: --proxy={:?} --proxy-auth={:?}",
