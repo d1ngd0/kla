@@ -1,9 +1,9 @@
-use std::{ffi::OsString, fs, sync::Arc};
+use std::{fs, sync::Arc};
 
 use anyhow::{anyhow, Context as _};
 use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
-    clap::{arg_file_value, arg_file_writer, DefaultValueIfSome},
+    clap::{arg_file_value, arg_file_writer},
     config::{Config, ConfigCommand},
     AsyncOption, CollectionBuilder, CollectionConfig, Environment, KlaClientBuilder,
     KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
@@ -14,7 +14,7 @@ use reqwest::{redirect::Policy, ClientBuilder, RequestBuilder, Response};
 use skim::{prelude::SkimOptionsBuilder, Skim, SkimItem};
 use tokio::sync::OnceCell;
 
-static DEFAULT_ENV: OnceCell<OsString> = OnceCell::const_new();
+static ENV: OnceCell<String> = OnceCell::const_new();
 
 static ROOT_ABOUT: &'static str = include_str!("txt/root_about.txt");
 static RUN_ABOUT: &'static str = include_str!("txt/run_about.txt");
@@ -27,7 +27,7 @@ fn command() -> Command {
         .subcommand_required(false)
         .arg(arg!(--config <CONFIG_FILE> "The configuration file to use"))
         .arg(arg!(--agent <AGENT> "The header agent string").default_value("kla"))
-        .arg(arg!(-e --env <ENVIRONMENT> "The environment we will run the request against").required(false).default_value_if_some(DEFAULT_ENV.get().map(|v| v.as_os_str())))
+        .arg(arg!(-e --env <ENVIRONMENT> "The environment we will run the request against").required(false))
         .arg(arg!(-t --template <TEMPLATE> "The template to use when formating the output. prepending with @ will read a file."))
         .arg(arg!(--"failure-template" <TEMPLATE> "The template to use when formating the failure output. prepending with @ will read a file."))
         .arg(arg!(-o --output <FILE> "The file to write the output into"))
@@ -159,7 +159,7 @@ async fn main() {
 }
 
 async fn run() -> Result<(), anyhow::Error> {
-    let m = command()
+    let mut m = command()
         .subcommand(
             Command::new("run")
                 .about("run templates defined for the environment")
@@ -204,18 +204,22 @@ async fn run() -> Result<(), anyhow::Error> {
             .iter(),
         )?
     };
+    log::debug!("Config Contents: {:?}", config);
 
-    // if the config file has a default environment we want to store it in a static
-    // variable so it can be used everywhere
-    if let Some(default_environment) = config
+    // check the env flag, and then the default config for the correct
+    // environment to use. If you ever need to get the environment
+    // use this onecell instead of checking the argument
+    if let Some(env) = m.get_one::<String>("env") {
+        ENV.get_or_init(|| async { env.into() }).await;
+    } else if let Some(default_environment) = config
         .default_environment
         .as_ref()
         .and_then(|path| fs::read_to_string(path).ok())
     {
-        DEFAULT_ENV
-            .get_or_init(|| async { OsString::from(default_environment) })
-            .await;
+        ENV.get_or_init(|| async { default_environment }).await;
     }
+    // make sure we can't use it
+    m.remove_one::<String>("env");
 
     colog::basic_builder()
         .filter_level(match m.get_count("verbose") {
@@ -307,15 +311,9 @@ async fn run_run<S: Into<String>>(
     trace!("running template {}", template);
 
     // Get the environment
-    let env =
-        Optional::from_config_with_priority(args.get_one::<String>("env"), conf, args_client(args))
-            .await
-            .with_context(|| {
-                format!(
-                    "could not load environment: {:?}",
-                    args.get_one::<String>("env")
-                )
-            })?;
+    let env = Optional::from_config_with_priority(ENV.get(), conf, args_client(args))
+        .await
+        .with_context(|| format!("could not load environment: {:?}", ENV.get(),))?;
     debug!("Running under environment {:#?}", env);
 
     // Get the configuration for the template in the environment
@@ -393,15 +391,9 @@ async fn run_run<S: Into<String>>(
 
 async fn run_run_empty(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     debug!("no template, running templates with empty set");
-    let env =
-        Optional::from_config_with_priority(args.get_one::<String>("env"), conf, args_client(args))
-            .await
-            .with_context(|| {
-                format!(
-                    "could not load environment: {:?}",
-                    args.get_one::<String>("env")
-                )
-            })?;
+    let env = Optional::from_config_with_priority(ENV.get(), conf, args_client(args))
+        .await
+        .with_context(|| format!("could not load environment: {:?}", ENV.get()))?;
 
     let mut m = Command::new("run")
         .about("run templates defined for the environment")
@@ -528,7 +520,7 @@ fn run_switch(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     if let Some(selected) = selected.as_ref() {
         match conf.default_environment.as_ref() {
             Some(file_path) => fs::write(file_path, selected).with_context(|| {
-                format!("could not write current environment file to {}", file_path)
+                format!("could not write current environment file to {:#?}", file_path)
             }),
             None => Err(anyhow!("config file does not specify a default_environment value in the root. This file stores the selected environment. Try adding `default_environment = \"~/.config/kla/.env\"` to your kla config file.")),
         }?;
@@ -572,10 +564,9 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
     };
     debug!("extracted environment: {:?}", env);
 
-    let env_string = env.as_ref().or_else(|| args.get_one::<String>("env"));
-    let env = Optional::from_config_with_priority(env_string, conf, args_client(args))
+    let env = Optional::from_config_with_priority(ENV.get(), conf, args_client(args))
         .await
-        .with_context(|| format!("could not load environment: {:?}", env_string))?;
+        .with_context(|| format!("could not load environment: {:?}", ENV.get()))?;
     info!("Environment: {}", env.name());
     info!("uri request <{:?}> [{}] {}", env, method, uri);
 
@@ -684,13 +675,7 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
 
 // run_environment prints the current default environment selected for kla
 fn run_environment(_args: &ArgMatches, _conf: &Config) -> Result<(), anyhow::Error> {
-    println!(
-        "{}",
-        DEFAULT_ENV
-            .get()
-            .map(|v| v.as_os_str().to_string_lossy())
-            .unwrap_or_default()
-    );
+    println!("{}", ENV.get().map(|s| s.as_str()).unwrap_or_default());
 
     Ok(())
 }

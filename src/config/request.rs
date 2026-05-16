@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Write};
+use std::path::PathBuf;
 
 use serde::Deserialize;
 use skim::SkimItem;
@@ -36,7 +37,7 @@ pub struct Endpoint {
     /// template_dir is a string location to the directory where the templates
     /// for this environment are stored. If there is no directory this should
     /// return None
-    pub template_dir: Option<String>,
+    pub template_dir: Option<PathBuf>,
 
     /// All the following are for AWS signing of requests. These options are
     /// applied to the request after it is built, and require usage of the

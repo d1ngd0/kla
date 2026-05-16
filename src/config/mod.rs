@@ -4,7 +4,7 @@ use log::info;
 use serde::Deserialize;
 use std::ffi::OsString;
 use std::fs::DirEntry;
-use std::path::PathBuf;
+use std::path::{absolute, PathBuf};
 use std::{fs, iter, path::Path};
 
 mod command;
@@ -22,7 +22,7 @@ pub use collection::*;
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(rename = "default_environment")]
-    pub default_environment: Option<String>,
+    pub default_environment: Option<PathBuf>,
 
     #[serde(rename = "settings")]
     pub default_client: Option<Attributes>,
@@ -34,7 +34,7 @@ pub struct Config {
     pub environment: Vec<Endpoint>,
 
     #[serde(rename = "collection")]
-    pub collection_dir: Option<String>,
+    pub collection_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -42,6 +42,10 @@ impl Config {
     where
         P: AsRef<Path>,
     {
+        // TODO: Fix this unwrap
+        let dir = absolute(&path.as_ref())?;
+        let dir = dir.parent().unwrap();
+
         let mut config = fs::read_to_string(path.as_ref())
             .with_context(|| format!("could not read file {:?}", path.as_ref()))
             .and_then(|content| {
@@ -49,11 +53,42 @@ impl Config {
                     .with_context(|| format!("could not parse toml from {:?}", path.as_ref()))
             })?;
 
+        // Go through all the environments configured and make sure they load relative links
+        // by the directory the config file is in.
+        for env in &mut config.environment {
+            env.template_dir = env.template_dir.take().map(|f| {
+                if f.is_relative() {
+                    PathBuf::from(dir).join(f)
+                } else {
+                    f
+                }
+            });
+        }
+
+        // default environment is also a path, and must have it's relative links made into
+        // absolute links
+        config.default_environment = config.default_environment.take().map(|f| {
+            if f.is_relative() {
+                PathBuf::from(dir).join(f)
+            } else {
+                f
+            }
+        });
+
+        // Finally do the same for collections
+        config.collection_dir = config.collection_dir.take().map(|f| {
+            if f.is_relative() {
+                PathBuf::from(dir).join(f)
+            } else {
+                f
+            }
+        });
+
         let sub_configs = config
             .sub_configs
             .clone()
             .into_iter()
-            .map(|v| v.to_configs())
+            .map(|v| v.to_configs(dir))
             .flatten();
 
         for sub_config in sub_configs {
@@ -68,7 +103,7 @@ impl Config {
         S: AsRef<str>,
         I: Iterator<Item = S>,
     {
-        let mut config = list
+        let config = list
             .map(|s| s.as_ref().shell_expansion())
             .filter(|f| Path::new(f).exists())
             .next()
@@ -78,7 +113,6 @@ impl Config {
                 Self::from_path(filename.as_str())
                     .with_context(|| format!("could not read config file {}", filename.as_str()))
             })?;
-        config.finalize();
 
         Ok(config)
     }
@@ -94,13 +128,6 @@ impl Config {
 
     pub fn environments(&self) -> std::slice::Iter<'_, Endpoint> {
         (&self.environment).into_iter()
-    }
-
-    fn finalize(&mut self) {
-        self.default_environment = self
-            .default_environment
-            .as_ref()
-            .map(<&String>::shell_expansion);
     }
 
     // collection_path is given the name of a collection and renders the path for it.
@@ -163,20 +190,39 @@ impl EnvironmentLoader<Specified> for &Config {
 #[serde(tag = "type")]
 pub enum SubConfig {
     #[serde(rename = "file")]
-    File { path: String },
+    File { path: PathBuf }, // TODO: Make into PathBuf
     #[serde(rename = "dir")]
-    Dir { path: String },
+    Dir { path: PathBuf },
 }
 
 impl SubConfig {
-    fn to_configs(&self) -> Box<dyn Iterator<Item = Result<Config>>> {
+    fn to_configs<P>(&self, working_dir: P) -> Box<dyn Iterator<Item = Result<Config>>>
+    where
+        P: AsRef<Path>,
+    {
         match self {
             SubConfig::File { path } => {
-                Box::new(iter::once(Config::from_path(path.shell_expansion())))
+                let buf: PathBuf;
+                let path = if path.is_relative() {
+                    buf = PathBuf::from(working_dir.as_ref()).join(path);
+                    &buf
+                } else {
+                    path
+                };
+
+                Box::new(iter::once(Config::from_path(path)))
             }
             SubConfig::Dir { path } => {
-                let entries = match fs::read_dir(path.shell_expansion())
-                    .with_context(|| format!("could not read directory {}", path))
+                let buf: PathBuf;
+                let path = if path.is_relative() {
+                    buf = PathBuf::from(working_dir.as_ref()).join(path);
+                    &buf
+                } else {
+                    path
+                };
+
+                let entries = match fs::read_dir(path)
+                    .with_context(|| format!("could not read directory {:#?}", path))
                 {
                     Ok(entries) => entries,
                     Err(err) => return Box::new(iter::once(Err(err.into()))),

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, future::Future, ops::Deref, sync::Arc};
+use std::{collections::HashMap, future::Future, ops::Deref, path::Path, sync::Arc};
 
 use reqwest::Response;
 
@@ -138,7 +138,7 @@ impl<T: Environment> Environment for CachedEnvironment<T> {
         self.env.name()
     }
 
-    fn template_dir(&self) -> Option<&String> {
+    fn template_dir(&self) -> Option<&Path> {
         self.env.template_dir()
     }
 

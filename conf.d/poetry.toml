@@ -5,5 +5,5 @@ url = "https://poetrydb.org/"
 short_description = "Poetry by authors"
 # The template directory is where template are for this context which can be
 # used with `run`
-template_dir = "./tmpl"
+template_dir = "tmpl/"
 

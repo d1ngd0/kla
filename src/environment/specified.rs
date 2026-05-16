@@ -1,11 +1,13 @@
+use std::path::{Path, PathBuf};
+
 use http::Method;
 use log::debug;
 use reqwest::{Client, ClientBuilder, IntoUrl, RequestBuilder};
 use tera::Value;
 
 use crate::{
-    config::Endpoint, Attributes, Config, Environment, Error, Expand, Opt, OptBaseURLBuilder,
-    Result, SigV4, URLBuilder, WithAttributes,
+    config::Endpoint, Attributes, Config, Environment, Error, Opt, OptBaseURLBuilder, Result,
+    SigV4, URLBuilder, WithAttributes,
 };
 
 #[derive(Debug, Clone)]
@@ -15,7 +17,7 @@ pub struct Specified {
     client: Client,
     url_builder: OptBaseURLBuilder,
     attr: Option<Attributes>,
-    tmpl_dir: Option<String>,
+    tmpl_dir: Option<PathBuf>,
     aws_sigv4: Option<SigV4>,
     context: Value,
 }
@@ -115,7 +117,7 @@ impl Specified {
             context: config.context.clone(),
             client: b.build()?,
             url_builder: OptBaseURLBuilder::some_new(prefix),
-            tmpl_dir: config.template_dir.as_ref().map(<&String>::shell_expansion),
+            tmpl_dir: config.template_dir.clone(),
             aws_sigv4,
         })
     }
@@ -142,8 +144,8 @@ impl Environment for Specified {
         &self.name
     }
 
-    fn template_dir(&self) -> Option<&String> {
-        self.tmpl_dir.as_ref()
+    fn template_dir(&self) -> Option<&Path> {
+        self.tmpl_dir.as_ref().map(|f| f.as_path())
     }
 
     fn sign(&self, req: reqwest::Request) -> Result<reqwest::Request> {

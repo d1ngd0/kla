@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::fmt::Pointer;
+use std::path::Path;
 
 use reqwest::ClientBuilder;
 
@@ -129,7 +130,7 @@ impl Environment for Optional {
         }
     }
 
-    fn template_dir(&self) -> Option<&String> {
+    fn template_dir(&self) -> Option<&Path> {
         match self {
             Optional::Specified(specified) => specified.template_dir(),
             Optional::Unspecified(unspecified) => unspecified.template_dir(),

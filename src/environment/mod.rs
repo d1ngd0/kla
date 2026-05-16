@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::path::Path;
 use std::{ffi::OsString, path::PathBuf};
 
 use std::fs::{self, DirEntry};
@@ -36,7 +37,7 @@ pub trait Environment: Send + Sync + std::fmt::Debug {
 
     /// template_dir should return the location of the template directory, the default
     /// implementation returns None
-    fn template_dir(&self) -> Option<&String> {
+    fn template_dir(&self) -> Option<&Path> {
         None
     }
 
