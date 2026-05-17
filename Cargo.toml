@@ -12,7 +12,7 @@ path = "src/bin/main.rs"
 [dependencies]
 clap = { version = "4.0.14", features = ["derive", "cargo", "string", "env"] }
 http = "1.0.0"
-reqwest = {version = "0.12", features = ["blocking", "stream", "gzip", "brotli", "deflate", "rustls-tls"]}
+reqwest = {version = "0.13", default-features=false,  features = ["blocking", "stream", "gzip", "brotli", "deflate", "rustls", "query", "form"]}
 thiserror = "1.0.37"
 tokio = { version = "1.21.2", features = ["full"]}
 toml = "0.5.9"
@@ -38,3 +38,13 @@ tokio-util = "0.7.17"
 futures = "0.3.31"
 bytes = "1.11.0"
 rayon = "1.11.0"
+oauth2 = "5.0.0"
+webbrowser = "1.2.1"
+oauth2-reqwest = { version = "0.1.0-alpha.3", features = ["blocking"] }
+sha2 = "0.11.0"
+hex = "0.4.3"
+tiny_http = "0.12.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+httpmock = "0.8.3"

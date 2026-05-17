@@ -80,6 +80,11 @@ You should think very carefully before you use this method. If hostname verifica
             Command::new("environment")
             .alias("env")
         )
+        .subcommand(
+            Command::new("oauth2")
+            .alias("oauth")
+            .about("Sign into an environment")
+        )
 }
 
 /// args_client parses the flags from the user and applies them to the client builder.
@@ -241,6 +246,7 @@ async fn run() -> Result<(), anyhow::Error> {
             run_collection(envs.get_one::<String>("collection"), &m, &config).await
         }
         Some(("environment", envs)) => run_environment(envs, &config),
+        Some(("oauth2", envs)) => run_oauth2(envs, &config),
         _ => run_root(&m, &config).await,
     }
 }
@@ -680,5 +686,9 @@ async fn run_root(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error>
 fn run_environment(_args: &ArgMatches, _conf: &Config) -> Result<(), anyhow::Error> {
     println!("{}", ENV.get().map(|s| s.as_str()).unwrap_or_default());
 
+    Ok(())
+}
+
+fn run_oauth2(_args: &ArgMatches, _conf: &Config) -> Result<(), anyhow::Error> {
     Ok(())
 }

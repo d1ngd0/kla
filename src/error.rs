@@ -1,7 +1,12 @@
 use std::convert::{From, Infallible};
 use std::error::Error as StdError;
+use std::sync::PoisonError;
+
+use oauth2::basic::BasicErrorResponseType;
+use oauth2::{HttpClientError, RequestTokenError, StandardErrorResponse};
 
 use crate::sigv4::SigningError;
+use crate::TokenFileContents;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -11,7 +16,7 @@ pub(crate) type BoxError = Box<dyn StdError + Send + Sync>;
 pub enum Error {
     #[error("Error Parsing Data: {0}")]
     BodyParsingError(#[from] serde_json::Error),
-    #[error("Configuration Error: {0}")]
+    #[error("HTTP Error: {0}")]
     HTTPError(#[from] reqwest::Error),
     #[error("Templating Error: {0}")]
     TemplateError(#[from] tera::Error),
@@ -33,6 +38,16 @@ pub enum Error {
     TomlError(#[from] toml::de::Error),
     #[error("aint never gonna happen")]
     Infallable(#[from] Infallible),
+    #[error("{0}")]
+    LockingError(#[from] PoisonError<TokenFileContents>),
+    #[error("{0}")]
+    OAuthError(
+        #[from]
+        RequestTokenError<
+            HttpClientError<reqwest::Error>,
+            StandardErrorResponse<BasicErrorResponseType>,
+        >,
+    ),
 }
 
 impl From<&str> for Error {

@@ -6,8 +6,8 @@ use reqwest::{Client, ClientBuilder, IntoUrl, RequestBuilder};
 use tera::Value;
 
 use crate::{
-    config::Endpoint, Attributes, Config, Environment, Error, Opt, OptBaseURLBuilder, Result,
-    SigV4, URLBuilder, WithAttributes,
+    config::Endpoint, Attributes, BrowserAuthorizer, Config, Environment, Error, OAuth, Opt,
+    OptBaseURLBuilder, Result, SigV4, URLBuilder, WithAttributes,
 };
 
 #[derive(Debug, Clone)]
@@ -19,6 +19,7 @@ pub struct Specified {
     attr: Option<Attributes>,
     tmpl_dir: Option<PathBuf>,
     aws_sigv4: Option<SigV4>,
+    oauth: Option<OAuth<BrowserAuthorizer>>,
     context: Value,
 }
 
@@ -119,6 +120,7 @@ impl Specified {
             url_builder: OptBaseURLBuilder::some_new(prefix),
             tmpl_dir: config.template_dir.clone(),
             aws_sigv4,
+            oauth: config.oauth.clone(),
         })
     }
 }
@@ -135,7 +137,10 @@ impl Environment for Specified {
         let b = self
             .client
             .request(method, url)
-            .with_some_result(self.attr.as_ref(), RequestBuilder::with_attributes)?;
+            .with_some_result(self.attr.as_ref(), RequestBuilder::with_attributes)?
+            .with_some_result(self.oauth.as_ref(), |builder, oauth| {
+                oauth.authorize(builder)
+            })?;
 
         Ok(b)
     }
@@ -149,11 +154,12 @@ impl Environment for Specified {
     }
 
     fn sign(&self, req: reqwest::Request) -> Result<reqwest::Request> {
+        let mut req = req;
         if let Some(signer) = self.aws_sigv4.as_ref() {
-            Ok(signer.sign(req)?)
-        } else {
-            Ok(req)
+            req = signer.sign(req)?;
         }
+
+        Ok(req)
     }
 
     fn context(&self, context: tera::Context) -> Result<tera::Context> {

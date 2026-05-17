@@ -7,6 +7,7 @@ use skim::SkimItem;
 use tera::Value;
 
 use crate::config::Attributes;
+use crate::{BrowserAuthorizer, OAuth};
 
 #[derive(Deserialize, Debug, Clone)]
 /// Endpoint is a configured environment that specifies a prefix, name, template_dir
@@ -38,6 +39,10 @@ pub struct Endpoint {
     /// for this environment are stored. If there is no directory this should
     /// return None
     pub template_dir: Option<PathBuf>,
+
+    /// oauth specifies all the stuff needed to automatically call to an oauth2
+    /// provider. How cool is that.
+    pub oauth: Option<OAuth<BrowserAuthorizer>>,
 
     /// All the following are for AWS signing of requests. These options are
     /// applied to the request after it is built, and require usage of the

@@ -1,6 +1,7 @@
 mod collection;
 mod environment; // environment struct and logic
 mod error; // package error handling
+mod oauth;
 mod opt;
 mod output; // managing the output of kla
 mod reqwest;
@@ -15,6 +16,7 @@ pub use collection::*;
 pub use config::*;
 pub use environment::*;
 pub use error::*;
+pub use oauth::*;
 pub use opt::*;
 pub use output::*;
 pub use reqwest::*;
