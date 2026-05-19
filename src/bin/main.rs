@@ -1,4 +1,4 @@
-use std::{fs, sync::Arc};
+use std::{fs, process::exit, sync::Arc};
 
 use anyhow::{anyhow, Context as _};
 use clap::{arg, command, ArgAction, ArgMatches, Command};
@@ -155,14 +155,10 @@ pub fn args_client<'a>(
 async fn main() {
     match run().await {
         Ok(_) => (),
-        Err(err) => error!(
-            "{}",
-            err.chain().fold(String::new(), |mut f, err| {
-                f.push_str(err.to_string().as_str());
-                f.push_str("\n");
-                f
-            })
-        ),
+        Err(err) => {
+            println!("{:?}", err);
+            exit(1);
+        }
     }
 }
 
@@ -238,7 +234,7 @@ async fn run() -> Result<(), anyhow::Error> {
         })
         .init();
 
-    match m.subcommand() {
+    let r = match m.subcommand() {
         Some(("environments", envs)) => run_environments(envs, &config),
         Some(("switch", envs)) => run_switch(envs, &config),
         Some(("run", envs)) => run_run(envs.get_one::<String>("template"), &m, &config).await,
@@ -248,7 +244,13 @@ async fn run() -> Result<(), anyhow::Error> {
         Some(("environment", envs)) => run_environment(envs, &config),
         Some(("oauth2", envs)) => run_oauth2(envs, &config),
         _ => run_root(&m, &config).await,
+    };
+
+    if let Err(err) = r {
+        log::error!("{}", err);
+        exit(1);
     }
+    Ok(())
 }
 
 /// run_run will exectute a template

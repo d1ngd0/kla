@@ -39,13 +39,13 @@ impl Authorizer for BrowserAuthorizer {
     fn authorize(&self, url: Url, _csrf: CsrfToken) -> Result<AuthorizationCode> {
         webbrowser::open(url.as_str())?;
 
-        let server = Server::http("127.0.0.1:9095").unwrap();
+        let server = Server::http("127.0.0.1:8085").unwrap();
 
         // Block until we receive one request
         let request = server.recv()?;
 
         // Reconstruct the full URL so we can parse query params
-        let full_url = format!("http://127.0.0.1:9095{}", request.url());
+        let full_url = format!("http://127.0.0.1:8085{}", request.url());
         let parsed = Url::parse(&full_url)?;
 
         // Extract the `code` query param from ?code=...&state=...
@@ -73,7 +73,7 @@ pub struct OAuth<T: Authorizer> {
     client_secret: ClientSecret,
     authorization_url: AuthUrl,
     token_url: TokenUrl,
-    redirect_url: RedirectUrl,
+    #[serde(default)]
     scopes: Vec<Scope>,
     #[serde(skip, default)]
     token_contents: Arc<RwLock<TokenFileContents>>,
@@ -142,7 +142,7 @@ impl<T: Authorizer> OAuth<T> {
             let contents = read_to_string(&path)?;
             let file_contents: TokenFileContents = serde_json::from_str(contents.as_str())?;
 
-            if token_contents.expires > Local::now() {
+            if file_contents.expires > Local::now() {
                 token_contents.token = file_contents.token;
                 token_contents.expires = file_contents.expires;
 
@@ -167,7 +167,6 @@ impl<T: Authorizer> OAuth<T> {
         hasher.update(self.client_secret.secret());
         hasher.update(self.authorization_url.as_bytes());
         hasher.update(self.token_url.as_bytes());
-        hasher.update(self.redirect_url.as_bytes());
 
         for scope in &self.scopes {
             hasher.update(scope.as_bytes());
@@ -185,7 +184,7 @@ impl<T: Authorizer> OAuth<T> {
             .set_auth_uri(self.authorization_url.clone())
             .set_token_uri(self.token_url.clone())
             // Set the URL the user will be redirected to after the authorization process.
-            .set_redirect_uri(self.redirect_url.clone());
+            .set_redirect_uri(RedirectUrl::new("http://127.0.0.1:8085".into())?);
 
         // Generate a PKCE challenge.
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
@@ -240,9 +239,7 @@ mod tests {
 
     use http::Method;
     use httpmock::MockServer;
-    use oauth2::{
-        AuthUrl, AuthorizationCode, ClientId, ClientSecret, RedirectUrl, Scope, TokenUrl,
-    };
+    use oauth2::{AuthUrl, AuthorizationCode, ClientId, ClientSecret, Scope, TokenUrl};
     use reqwest::ClientBuilder;
     use serde_json::json;
     use tokio::runtime::Runtime;
@@ -313,7 +310,6 @@ mod tests {
             client_secret: ClientSecret::new("2io3fnaldvmaw09evmaisdhfas".into()),
             authorization_url: AuthUrl::new(auth_url.into())?,
             token_url: TokenUrl::new(token_url.into())?,
-            redirect_url: RedirectUrl::new("http://localhost:9095/callback".into())?,
             token_contents: Arc::new(RwLock::new(TokenFileContents::default())),
             scopes: vec![
                 Scope::new("read".to_string()),
