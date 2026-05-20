@@ -1,4 +1,7 @@
-use std::{fs::read_to_string, path::PathBuf};
+use std::{
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
 use oauth2::{AuthUrl, ClientId, ClientSecret as OauthClientSecret, Scope, TokenUrl};
 use serde::{Deserialize, Serialize};
@@ -11,6 +14,21 @@ pub struct OAuth {
     pub token_url: TokenUrl,
     #[serde(default)]
     pub scopes: Vec<Scope>,
+}
+
+impl OAuth {
+    /// resolve_working_dir finds any relative paths referenced in the config
+    /// and resolves them with `dir` as it's base.
+    pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
+        match &self.client_secret {
+            ClientSecret::File(path) => {
+                if path.is_relative() {
+                    self.client_secret = ClientSecret::File(PathBuf::from(dir.as_ref()).join(path))
+                }
+            }
+            ClientSecret::Value(_) => (),
+        }
+    }
 }
 
 /// ClientSecret holds a file path or a value to specify the client secret.

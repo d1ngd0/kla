@@ -57,7 +57,13 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
+    /// resolve_working_dir will find any relative links and turn them
+    /// into absolute links with the provided base
     pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
+        self.oauth
+            .as_mut()
+            .map(|a| a.resolve_working_dir(dir.as_ref()));
+
         self.template_dir = self.template_dir.take().map(|f| {
             if f.is_relative() {
                 PathBuf::from(dir.as_ref()).join(f)
