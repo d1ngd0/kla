@@ -1,13 +1,14 @@
 use std::path::{Path, PathBuf};
 
+use crate::oauth::{BrowserAuthorizer, OAuth};
 use http::Method;
 use log::debug;
 use reqwest::{Client, ClientBuilder, IntoUrl, RequestBuilder};
 use tera::Value;
 
 use crate::{
-    config::Endpoint, Attributes, BrowserAuthorizer, Config, Environment, Error, OAuth, Opt,
-    OptBaseURLBuilder, Result, SigV4, URLBuilder, WithAttributes,
+    config::Endpoint, Attributes, Config, Environment, Error, Opt, OptBaseURLBuilder, Result,
+    SigV4, URLBuilder, WithAttributes,
 };
 
 #[derive(Debug, Clone)]
@@ -120,7 +121,11 @@ impl Specified {
             url_builder: OptBaseURLBuilder::some_new(prefix),
             tmpl_dir: config.template_dir.clone(),
             aws_sigv4,
-            oauth: config.oauth.clone(),
+            oauth: config
+                .oauth
+                .as_ref()
+                .map(|f| f.clone().try_into())
+                .transpose()?,
         })
     }
 }

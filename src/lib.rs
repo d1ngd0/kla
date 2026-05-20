@@ -16,7 +16,6 @@ pub use collection::*;
 pub use config::*;
 pub use environment::*;
 pub use error::*;
-pub use oauth::*;
 pub use opt::*;
 pub use output::*;
 pub use reqwest::*;

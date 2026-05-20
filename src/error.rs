@@ -1,12 +1,10 @@
 use std::convert::{From, Infallible};
 use std::error::Error as StdError;
-use std::sync::PoisonError;
 
 use oauth2::basic::BasicErrorResponseType;
 use oauth2::{HttpClientError, RequestTokenError, StandardErrorResponse};
 
 use crate::sigv4::SigningError;
-use crate::TokenFileContents;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -38,8 +36,6 @@ pub enum Error {
     TomlError(#[from] toml::de::Error),
     #[error("aint never gonna happen")]
     Infallable(#[from] Infallible),
-    #[error("{0}")]
-    LockingError(#[from] PoisonError<TokenFileContents>),
     #[error("{0}")]
     OAuthError(
         #[from]

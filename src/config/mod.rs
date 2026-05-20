@@ -19,6 +19,9 @@ pub use client::*;
 mod collection;
 pub use collection::*;
 
+mod oauth;
+pub use oauth::*;
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(rename = "default_environment")]

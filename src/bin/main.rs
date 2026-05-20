@@ -8,7 +8,7 @@ use kla::{
     AsyncOption, CollectionBuilder, CollectionConfig, Environment, KlaClientBuilder,
     KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
 };
-use log::{debug, error, info, trace, LevelFilter};
+use log::{debug, info, trace, LevelFilter};
 use regex::Regex;
 use reqwest::{redirect::Policy, ClientBuilder, RequestBuilder, Response};
 use skim::{prelude::SkimOptionsBuilder, Skim, SkimItem};

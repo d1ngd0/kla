@@ -1,71 +1,23 @@
 use std::{
     fs::{self, read_to_string},
-    ops::Add,
+    ops::Add as _,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
 
-use crate::Result;
-use chrono::{DateTime, Duration, Local};
-use oauth2::{basic::BasicClient, AccessToken, TokenResponse};
+use chrono::{Duration, Local};
 use oauth2::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, RedirectUrl,
-    Scope, TokenUrl,
+    basic::BasicClient, AccessToken, AuthUrl, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
+    RedirectUrl, Scope, TokenResponse as _, TokenUrl,
 };
 use oauth2_reqwest::ReqwestBlockingClient;
 use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use tiny_http::{Response, Server};
-use url::Url;
+use sha2::{Digest as _, Sha256};
 
-/// Anuthorizer holds the logic which takes the Authorization endpoint and returns
-/// the AuthorizationCode. This function is what should open a webbrowser or whatever
-/// you should make sure the csrf token matches what you found in the redirectURL
-pub trait Authorizer {
-    fn authorize(&self, url: Url, csrf: CsrfToken) -> Result<AuthorizationCode>;
-}
+use crate::Result;
 
-impl<T: Fn(Url, CsrfToken) -> Result<AuthorizationCode>> Authorizer for T {
-    fn authorize(&self, url: Url, csrf: CsrfToken) -> Result<AuthorizationCode> {
-        self(url, csrf)
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Copy, Debug, Default)]
-pub struct BrowserAuthorizer {}
-
-impl Authorizer for BrowserAuthorizer {
-    fn authorize(&self, url: Url, _csrf: CsrfToken) -> Result<AuthorizationCode> {
-        webbrowser::open(url.as_str())?;
-
-        let server = Server::http("127.0.0.1:8085").unwrap();
-
-        // Block until we receive one request
-        let request = server.recv()?;
-
-        // Reconstruct the full URL so we can parse query params
-        let full_url = format!("http://127.0.0.1:8085{}", request.url());
-        let parsed = Url::parse(&full_url)?;
-
-        // Extract the `code` query param from ?code=...&state=...
-        let code = parsed
-            .query_pairs()
-            .find(|(key, _)| key == "code")
-            .map(|(_, value)| value.into_owned())
-            .ok_or("No 'code' param in callback URL")?;
-
-        // Respond to the browser so the user sees a success page
-        let response = Response::from_string(
-        "<html><body><h2>Authentication successful!</h2><p>You can close this tab.</p></body></html>"
-    ).with_header(
-        "Content-Type: text/html".parse::<tiny_http::Header>().unwrap()
-    );
-        request.respond(response)?;
-
-        Ok(AuthorizationCode::new(code))
-    }
-}
+use super::{token_file_contents::TokenFileContents, Authorizer};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OAuth<T: Authorizer> {
@@ -81,24 +33,22 @@ pub struct OAuth<T: Authorizer> {
     authorizer: T,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TokenFileContents {
-    token: AccessToken,
-    expires: DateTime<Local>,
-}
+/// implment the TryFrom trait for any Authorizer that specifies a default
+/// value.
+impl<T: Authorizer + Default> TryFrom<crate::config::OAuth> for OAuth<T> {
+    type Error = crate::Error;
 
-impl Default for TokenFileContents {
-    fn default() -> Self {
-        Self {
-            token: AccessToken::new(String::default()),
-            expires: Local::now(),
-        }
-    }
-}
-
-impl TokenFileContents {
-    fn empty(&self) -> bool {
-        return self.token.secret() == "";
+    fn try_from(value: crate::config::OAuth) -> std::result::Result<Self, Self::Error> {
+        let s = Self {
+            client_id: value.client_id,
+            client_secret: value.client_secret.try_into()?,
+            authorization_url: value.authorization_url,
+            token_url: value.token_url,
+            scopes: value.scopes,
+            token_contents: Arc::new(RwLock::new(TokenFileContents::default())),
+            authorizer: T::default(),
+        };
+        Ok(s)
     }
 }
 
@@ -106,17 +56,15 @@ impl<T: Authorizer> OAuth<T> {
     /// sign will take the existing token and apply it
     /// to the header.
     pub fn authorize(&self, builder: RequestBuilder) -> Result<RequestBuilder> {
-        let token_contents = self.fetch_token_contents()?;
-        Ok(builder.bearer_auth(token_contents.token.into_secret()))
+        let token = self.fetch_token()?;
+        Ok(builder.bearer_auth(token.into_secret()))
     }
 
-    pub fn fetch_token_contents(&self) -> Result<TokenFileContents> {
+    pub fn fetch_token(&self) -> Result<AccessToken> {
         // First check if the contents are in memory, if they are and aren't expired let's return that
         let token_contents = self.token_contents.read().unwrap();
-        if !token_contents.empty() {
-            if token_contents.expires > Local::now() {
-                return Ok(token_contents.clone());
-            }
+        if let Some(token) = token_contents.token() {
+            return Ok(token.clone());
         }
         drop(token_contents);
 
@@ -127,10 +75,8 @@ impl<T: Authorizer> OAuth<T> {
         // it's possible more than one of us got to this point, so let's make sure
         // a sibling process didn't already update the contents, if they did we
         // can return and unlock
-        if !token_contents.empty() {
-            if token_contents.expires > Local::now() {
-                return Ok(token_contents.clone());
-            }
+        if let Some(token) = token_contents.token() {
+            return Ok(token.clone());
         }
 
         // Alright, the contents are not in memory, or the data is old, let's try
@@ -142,11 +88,12 @@ impl<T: Authorizer> OAuth<T> {
             let contents = read_to_string(&path)?;
             let file_contents: TokenFileContents = serde_json::from_str(contents.as_str())?;
 
-            if file_contents.expires > Local::now() {
-                token_contents.token = file_contents.token;
-                token_contents.expires = file_contents.expires;
-
-                return Ok(token_contents.clone());
+            if !file_contents.expired() {
+                token_contents.update(file_contents);
+                return Ok(token_contents
+                    .token()
+                    .expect("We litterally just set the token and it wasn't expired")
+                    .clone());
             }
         }
 
@@ -154,10 +101,12 @@ impl<T: Authorizer> OAuth<T> {
         let process_contents = self.token()?;
         fs::write(&path, serde_json::to_string(&process_contents)?)?;
 
-        token_contents.token = process_contents.token;
-        token_contents.expires = process_contents.expires;
+        token_contents.update(process_contents);
 
-        Ok(token_contents.clone())
+        return Ok(token_contents
+            .token()
+            .expect("We litterally just set the token and it wasn't expired")
+            .clone());
     }
 
     pub fn token_filename(&self) -> PathBuf {
@@ -219,9 +168,9 @@ impl<T: Authorizer> OAuth<T> {
             .set_pkce_verifier(pkce_verifier)
             .request(&http_client)?;
 
-        Ok(TokenFileContents {
-            token: token_resp.access_token().clone(),
-            expires: Local::now().add(
+        Ok(TokenFileContents::new(
+            token_resp.access_token().clone(),
+            Local::now().add(
                 token_resp
                     .expires_in()
                     .map(Duration::from_std)
@@ -229,7 +178,7 @@ impl<T: Authorizer> OAuth<T> {
                     .flatten()
                     .unwrap_or_else(|| Duration::seconds(300)),
             ),
-        })
+        ))
     }
 }
 
@@ -244,7 +193,7 @@ mod tests {
     use serde_json::json;
     use tokio::runtime::Runtime;
 
-    use crate::{OAuth, TokenFileContents};
+    use super::{OAuth, TokenFileContents};
 
     type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
