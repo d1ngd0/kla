@@ -46,7 +46,10 @@ impl TryFrom<ClientSecret> for oauth2::ClientSecret {
     /// Consume the ClientSecret and return an oauth::ClientSecret
     fn try_from(value: ClientSecret) -> Result<Self, Self::Error> {
         match value {
-            ClientSecret::File(path) => Ok(oauth2::ClientSecret::new(read_to_string(path)?)),
+            ClientSecret::File(path) => {
+                let s = read_to_string(path)?;
+                Ok(oauth2::ClientSecret::new(s.replace(['\n', '\r'], "")))
+            }
             ClientSecret::Value(client_secret) => Ok(client_secret),
         }
     }
