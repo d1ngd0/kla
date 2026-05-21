@@ -44,6 +44,10 @@ pub enum Error {
             StandardErrorResponse<BasicErrorResponseType>,
         >,
     ),
+    #[error("{0}")]
+    KeyError(#[from] rcgen::Error),
+    #[error("{0}")]
+    GenError(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
 impl From<&str> for Error {

@@ -11,11 +11,12 @@ use oauth2::{
     RedirectUrl, Scope, TokenResponse as _, TokenUrl,
 };
 use oauth2_reqwest::ReqwestBlockingClient;
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use crate::Result;
+use crate::{oauth::BrowserAuthorizer, Result};
 
 use super::{token_file_contents::TokenFileContents, Authorizer};
 
@@ -35,10 +36,23 @@ pub struct OAuth<T: Authorizer> {
 
 /// implment the TryFrom trait for any Authorizer that specifies a default
 /// value.
-impl<T: Authorizer + Default> TryFrom<crate::config::OAuth> for OAuth<T> {
+impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
     type Error = crate::Error;
 
     fn try_from(value: crate::config::OAuth) -> std::result::Result<Self, Self::Error> {
+        let mut auth = BrowserAuthorizer {
+            redirect_port: value.redirect_port.unwrap_or(8085),
+            redirect_certificate: None,
+            redirect_private_key: None,
+        };
+
+        if value.https {
+            let CertifiedKey { cert, signing_key } =
+                generate_simple_self_signed(["127.0.0.1".into(), "localhost".into()])?;
+            auth.redirect_certificate = Some(cert.pem().into());
+            auth.redirect_private_key = Some(signing_key.public_key_pem().into());
+        }
+
         let s = Self {
             client_id: value.client_id,
             client_secret: value.client_secret.try_into()?,
@@ -46,7 +60,7 @@ impl<T: Authorizer + Default> TryFrom<crate::config::OAuth> for OAuth<T> {
             token_url: value.token_url,
             scopes: value.scopes,
             token_contents: Arc::new(RwLock::new(TokenFileContents::default())),
-            authorizer: T::default(),
+            authorizer: auth,
         };
         Ok(s)
     }

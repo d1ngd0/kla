@@ -6,11 +6,17 @@ use std::{
 use oauth2::{AuthUrl, ClientId, ClientSecret as OauthClientSecret, Scope, TokenUrl};
 use serde::{Deserialize, Serialize};
 
+// TODO: this should be more configurable, we assume they will use the browser
+// authorizer, but there could be better ways to do this in the future, like a
+// proxy that we should support.
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct OAuth {
     pub client_id: ClientId,
     pub client_secret: ClientSecret,
     pub authorization_url: AuthUrl,
+    pub redirect_port: Option<u16>,
+    #[serde(default)]
+    pub https: bool,
     pub token_url: TokenUrl,
     #[serde(default)]
     pub scopes: Vec<Scope>,
@@ -84,6 +90,8 @@ mod test {
             authorization_url: AuthUrl::new("https://localhost:9999".into())?,
             token_url: TokenUrl::new("https://localhost:9999".into())?,
             scopes: vec![Scope::new("testvalue".into())],
+            redirect_port: None,
+            https: false,
         };
 
         assert_eq!(oauth_config.client_id, expected.client_id);
