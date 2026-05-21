@@ -26,6 +26,7 @@ pub struct OAuth<T: Authorizer> {
     client_secret: ClientSecret,
     authorization_url: AuthUrl,
     token_url: TokenUrl,
+    redirect_url: RedirectUrl,
     #[serde(default)]
     scopes: Vec<Scope>,
     #[serde(skip, default)]
@@ -40,8 +41,9 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
     type Error = crate::Error;
 
     fn try_from(value: crate::config::OAuth) -> std::result::Result<Self, Self::Error> {
+        let redirect_port = value.redirect_port.unwrap_or(8085);
         let mut auth = BrowserAuthorizer {
-            redirect_port: value.redirect_port.unwrap_or(8085),
+            redirect_port: redirect_port,
             redirect_certificate: None,
             redirect_private_key: None,
         };
@@ -58,6 +60,11 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
             client_secret: value.client_secret.try_into()?,
             authorization_url: value.authorization_url,
             token_url: value.token_url,
+            redirect_url: RedirectUrl::new(format!(
+                "{}://127.0.0.1:{}",
+                if value.https { "https" } else { "http" },
+                redirect_port
+            ))?,
             scopes: value.scopes,
             token_contents: Arc::new(RwLock::new(TokenFileContents::default())),
             authorizer: auth,
@@ -202,7 +209,9 @@ mod tests {
 
     use http::Method;
     use httpmock::MockServer;
-    use oauth2::{AuthUrl, AuthorizationCode, ClientId, ClientSecret, Scope, TokenUrl};
+    use oauth2::{
+        AuthUrl, AuthorizationCode, ClientId, ClientSecret, RedirectUrl, Scope, TokenUrl,
+    };
     use reqwest::ClientBuilder;
     use serde_json::json;
     use tokio::runtime::Runtime;
@@ -274,6 +283,7 @@ mod tests {
             authorization_url: AuthUrl::new(auth_url.into())?,
             token_url: TokenUrl::new(token_url.into())?,
             token_contents: Arc::new(RwLock::new(TokenFileContents::default())),
+            redirect_url: RedirectUrl::new("http://localhost:8085".into())?,
             scopes: vec![
                 Scope::new("read".to_string()),
                 Scope::new("write".to_string()),
