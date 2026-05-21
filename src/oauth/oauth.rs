@@ -153,8 +153,7 @@ impl<T: Authorizer> OAuth<T> {
             .set_client_secret(self.client_secret.clone())
             .set_auth_uri(self.authorization_url.clone())
             .set_token_uri(self.token_url.clone())
-            // Set the URL the user will be redirected to after the authorization process.
-            .set_redirect_uri(RedirectUrl::new("http://127.0.0.1:8085".into())?);
+            .set_redirect_uri(self.redirect_url.clone());
 
         // Generate a PKCE challenge.
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
