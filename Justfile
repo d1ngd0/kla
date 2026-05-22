@@ -27,4 +27,9 @@ uninstall:
 
 # Make incremental commits when tests pass
 savepoint:
+    #!/bin/bash
+    if (git branch --show-current | grep -oq "main"); then
+        echo "󰊢 Main branch selected, not starting savepoint"
+        exit 1
+    fi
     savepoint --clear --filetype rs just test
