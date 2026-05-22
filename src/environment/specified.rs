@@ -1,14 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use crate::oauth::{BrowserAuthorizer, OAuth};
 use http::Method;
 use log::debug;
-use reqwest::{Client, ClientBuilder, IntoUrl, RequestBuilder};
+use reqwest::{Client, ClientBuilder, IntoUrl};
 use tera::Value;
 
 use crate::{
-    config::Endpoint, Attributes, Config, Environment, Error, Opt, OptBaseURLBuilder, Result,
-    SigV4, URLBuilder, WithAttributes,
+    config::{self, Config, Endpoint},
+    Attributes, Environment, Error, OptBaseURLBuilder, Result, URLBuilder, WithAttributes,
 };
 
 #[derive(Debug, Clone)]
@@ -17,18 +16,16 @@ pub struct Specified {
     name: String,
     client: Client,
     url_builder: OptBaseURLBuilder,
-    attr: Option<Attributes>,
+    attr: Attributes,
     tmpl_dir: Option<PathBuf>,
-    aws_sigv4: Option<SigV4>,
-    oauth: Option<OAuth<BrowserAuthorizer>>,
     context: Value,
 }
 
 impl Specified {
     /// Create a new Specified client from the provided config. The Config is expected
     /// to be deserialized into a
-    pub async fn new(builder: ClientBuilder, config: &Endpoint) -> Result<Self> {
-        Self::new_with_priority(builder, config, |c| Ok(c)).await
+    pub async fn new(config: &Endpoint, attrs: config::Attributes) -> Result<Self> {
+        Self::new_with_priority(config, attrs).await
     }
 
     /// from_config is passed a path to the environment, and the full configuration
@@ -37,23 +34,15 @@ impl Specified {
     /// the function also allows specifying overrides
     /// This function also applies the client configurations for the config object itself
     /// so you don't need to do that
-    pub async fn from_config_with_priority<S, F>(
+    pub async fn from_config_with_priority<S>(
         name: S,
         config: &Config,
-        overrides: F,
+        attrs: config::Attributes,
     ) -> Result<Self>
     where
         S: AsRef<str>,
-        F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
         debug!("loading environment {} from config", name.as_ref());
-        // here we add the default client configuration, meaning it has the lowest priority
-        // for setting the value. If you create an environment without using this function
-        // you need to add default_client yourself
-        let builder = ClientBuilder::new().with_some_result(
-            config.default_client.as_ref(),
-            ClientBuilder::with_attributes,
-        )?;
 
         let endpoint = config
             .environments()
@@ -66,43 +55,21 @@ impl Specified {
                 ))
             })?;
 
-        Ok(Specified::new_with_priority(builder, endpoint, overrides).await?)
+        Ok(Specified::new_with_priority(endpoint, attrs).await?)
     }
 
     /// new_with_priority creates a new environment where you get a hook to modify the
     /// clientbuilder and inject your own settings.
-    pub async fn new_with_priority<F>(
-        builder: ClientBuilder,
-        config: &Endpoint,
-        overrides: F,
-    ) -> Result<Self>
-    where
-        F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
-    {
+    pub async fn new_with_priority(config: &Endpoint, attrs: config::Attributes) -> Result<Self> {
         debug!(
             "creating new environment from specified config {:#?}",
             &config
         );
 
-        // here we add the environment level configurations, along with the overrides, this
-        // means that the environment specified attributes can be overloaded by the overrides
-        // which is often the cli arguments
-        let b = overrides(
-            builder.with_some_result(config.attr.as_ref(), ClientBuilder::with_attributes)?,
-        )?;
-
-        let mut aws_sigv4: Option<SigV4> = None;
-        if let Some(attr) = config.attr.as_ref() {
-            if attr.sigv4.unwrap_or(false) {
-                aws_sigv4 = Some(
-                    SigV4::new(
-                        attr.sigv4_aws_profile.as_ref(),
-                        attr.sigv4_aws_service.as_ref(),
-                    )
-                    .await?,
-                )
-            }
-        }
+        // Clone with configuration from the endpoint, prioritizing the upstream
+        // configurations
+        let attrs: Attributes = attrs.merge(config.attr.as_ref()).try_into()?;
+        let builder = ClientBuilder::new().with_attributes(&attrs)?;
 
         // clean up the endpoint
         let prefix = config.prefix.as_ref().map(|v| {
@@ -115,17 +82,11 @@ impl Specified {
 
         Ok(Self {
             name: config.name.clone(),
-            attr: config.attr.clone(),
+            attr: attrs,
             context: config.context.clone(),
-            client: b.build()?,
+            client: builder.build()?,
             url_builder: OptBaseURLBuilder::some_new(prefix),
             tmpl_dir: config.template_dir.clone(),
-            aws_sigv4,
-            oauth: config
-                .oauth
-                .as_ref()
-                .map(|f| f.clone().try_into())
-                .transpose()?,
         })
     }
 }
@@ -139,15 +100,9 @@ impl Environment for Specified {
     {
         let method = method.try_into().map_err(E::into)?;
         let url = self.url_builder.build(url.as_str())?;
-        let b = self
-            .client
+        self.client
             .request(method, url)
-            .with_some_result(self.attr.as_ref(), RequestBuilder::with_attributes)?
-            .with_some_result(self.oauth.as_ref(), |builder, oauth| {
-                oauth.authorize(builder)
-            })?;
-
-        Ok(b)
+            .with_attributes(self.attr.as_ref())
     }
 
     fn name(&self) -> &String {
@@ -156,15 +111,6 @@ impl Environment for Specified {
 
     fn template_dir(&self) -> Option<&Path> {
         self.tmpl_dir.as_ref().map(|f| f.as_path())
-    }
-
-    fn sign(&self, req: reqwest::Request) -> Result<reqwest::Request> {
-        let mut req = req;
-        if let Some(signer) = self.aws_sigv4.as_ref() {
-            req = signer.sign(req)?;
-        }
-
-        Ok(req)
     }
 
     fn context(&self, context: tera::Context) -> Result<tera::Context> {

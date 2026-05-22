@@ -2,11 +2,13 @@ use std::borrow::Cow;
 use std::fmt::{Display, Write};
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use skim::SkimItem;
 use tera::Value;
 
 use crate::config::{Attributes, OAuth};
+
+use super::SigV4;
 
 #[derive(Deserialize, Debug, Clone)]
 /// Endpoint is a configured environment that specifies a prefix, name, template_dir
@@ -21,9 +23,9 @@ pub struct Endpoint {
     /// string
     pub prefix: Option<String>,
 
-    #[serde(rename = "settings")]
+    #[serde(rename = "settings", default)]
     /// client sets the client Configurations available
-    pub attr: Option<Attributes>,
+    pub attr: Attributes,
 
     #[serde(rename = "short_description")]
     /// short_description is shown to the user when running kla envs
@@ -39,19 +41,6 @@ pub struct Endpoint {
     /// return None
     pub template_dir: Option<PathBuf>,
 
-    /// oauth specifies all the stuff needed to automatically call to an oauth2
-    /// provider. How cool is that.
-    pub oauth: Option<OAuth>,
-
-    /// All the following are for AWS signing of requests. These options are
-    /// applied to the request after it is built, and require usage of the
-    /// WithEnvironment trait on the request itself
-    #[serde(rename = "sigv4")]
-    pub sigv4: Option<bool>,
-    #[serde(rename = "sigv4_aws_profile")]
-    pub sigv4_aws_profile: Option<String>,
-    #[serde(rename = "sigv4_aws_service")]
-    pub sigv4_aws_service: Option<String>,
     #[serde(rename = "context", default)]
     pub context: Value,
 }
@@ -60,9 +49,7 @@ impl Endpoint {
     /// resolve_working_dir will find any relative links and turn them
     /// into absolute links with the provided base
     pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
-        self.oauth
-            .as_mut()
-            .map(|a| a.resolve_working_dir(dir.as_ref()));
+        self.attr.resolve_working_dir(dir.as_ref());
 
         self.template_dir = self.template_dir.take().map(|f| {
             if f.is_relative() {
@@ -111,5 +98,29 @@ impl SkimItem for Endpoint {
             write!(f, "\n{}\n", long_description).unwrap();
         }
         skim::ItemPreview::Text(f)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum Authentication {
+    SigV4(SigV4),
+    OAuth(OAuth),
+    None,
+}
+
+impl Default for Authentication {
+    fn default() -> Self {
+        return Authentication::None;
+    }
+}
+
+impl Authentication {
+    pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
+        match self {
+            Authentication::SigV4(_) => (),
+            Authentication::OAuth(oauth) => oauth.resolve_working_dir(dir.as_ref()),
+            Authentication::None => (),
+        }
     }
 }

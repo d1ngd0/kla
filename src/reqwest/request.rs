@@ -1,11 +1,10 @@
-use duration_string::DurationString;
 use http::Version;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Request, RequestBuilder,
 };
+use std::fmt::Display;
 use std::{collections::HashMap, time::Duration};
-use std::{fmt::Display, str::FromStr};
 
 use crate::{impl_opt, impl_when, Error, RenderGroup, Result};
 
@@ -121,7 +120,7 @@ impl KlaRequestBuilder for RequestBuilder {
         // duration_string?!?!?!?! why do you return a string as an error
         // what the f**k is wrong with you.
         // Also thanks for the library!
-        let d: Duration = match DurationString::from_str(timeout.unwrap()) {
+        let d: Duration = match duration_str::parse(timeout.unwrap()) {
             Ok(v) => Ok(v),
             Err(msg) => Err(Error::from(msg)),
         }?

@@ -4,13 +4,13 @@ use std::{
 };
 
 use crate::{
-    CachedEnvironment, CollectedEnvironmentGroup, CollectedTemplateGroup, CollectionConfig,
-    ConfigArgCollection, EnvironmentLoader, ExecutableTemplate, Output, Result, Specified,
+    config::CollectedEnvironmentGroup, config::CollectedTemplateGroup, config::CollectionConfig,
+    config::ConfigArgCollection, config::ExecutableTemplate, CachedEnvironment, EnvironmentLoader,
+    Output, Result, Specified,
 };
 use anyhow::anyhow;
 use clap::ArgMatches;
 use log::error;
-use reqwest::ClientBuilder;
 use tera::Context;
 use tokio::{io::stdout, task::JoinSet};
 
@@ -33,10 +33,7 @@ impl<'a, E: EnvironmentLoader<Specified> + Copy> CollectionBuilder<'a, E> {
         self
     }
 
-    pub fn build<F>(self, _client_builder: F) -> Result<Collection>
-    where
-        F: Fn(ClientBuilder) -> Result<ClientBuilder>,
-    {
+    pub fn build(self) -> Result<Collection> {
         let config = self
             .config
             .ok_or_else(|| anyhow!("must specify config for collection"))?;

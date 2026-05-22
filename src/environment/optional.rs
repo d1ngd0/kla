@@ -2,15 +2,12 @@ use std::fmt::Display;
 use std::fmt::Pointer;
 use std::path::Path;
 
-use reqwest::ClientBuilder;
-
 use super::Environment;
 
+use crate::config::Attributes;
 use crate::config::Config;
 use crate::config::Endpoint;
 use crate::environment::{specified::Specified, unspecified::Unspecified};
-use crate::Opt;
-use crate::WithAttributes;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone)]
@@ -27,10 +24,10 @@ pub enum Optional {
 impl Optional {
     /// new takes an optional config, when supplied we run the config through Specified.
     /// when left None we use a default unspecified.
-    pub async fn new(builder: ClientBuilder, config: Option<&Endpoint>) -> Result<Self> {
+    pub async fn new(config: Option<&Endpoint>, attrs: Attributes) -> Result<Self> {
         let env = match config {
-            Some(config) => Optional::Specified(Specified::new(builder, config).await?),
-            None => Optional::Unspecified(Unspecified::new(builder)?),
+            Some(config) => Optional::Specified(Specified::new(config, attrs).await?),
+            None => Optional::Unspecified(Unspecified::new(attrs)?),
         };
         Ok(env)
     }
@@ -38,19 +35,10 @@ impl Optional {
     /// new takes an optional config, when supplied we run the config through Specified.
     /// when left None we use a default unspecified. Both paths specify the overrides when
     /// generating the underlying client for the environment
-    pub async fn new_with_priority<F>(
-        builder: ClientBuilder,
-        config: Option<&Endpoint>,
-        overrides: F,
-    ) -> Result<Self>
-    where
-        F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
-    {
+    pub async fn new_with_priority(config: Option<&Endpoint>, attr: Attributes) -> Result<Self> {
         let env = match config {
-            Some(config) => {
-                Optional::Specified(Specified::new_with_priority(builder, config, overrides).await?)
-            }
-            None => Optional::Unspecified(Unspecified::new_with_priority(builder, overrides)?),
+            Some(config) => Optional::Specified(Specified::new_with_priority(config, attr).await?),
+            None => Optional::Unspecified(Unspecified::new_with_priority(attr)?),
         };
         Ok(env)
     }
@@ -60,23 +48,15 @@ impl Optional {
     /// the function also allows specifying overrides
     /// This function also applies the client configurations for the config object itself
     /// so you don't need to do that
-    pub async fn from_config_with_priority<S, F>(
+    pub async fn from_config_with_priority<S>(
         name: Option<S>,
         config: &Config,
-        overrides: F,
+        attrs: &Attributes,
     ) -> Result<Self>
     where
         S: AsRef<str>,
-        F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
     {
-        // here we add the default client configuration, meaning it has the lowest priority
-        // for setting the value. If you create an environment without using this function
-        // you need to add default_client yourself
-        let builder = ClientBuilder::new().with_some_result(
-            config.default_client.as_ref(),
-            ClientBuilder::with_attributes,
-        )?;
-
+        let attrs = attrs.merge(&config.default_client);
         let env = match name {
             Some(name) => {
                 let endpoint = config
@@ -90,11 +70,9 @@ impl Optional {
                         ))
                     })?;
 
-                Optional::Specified(
-                    Specified::new_with_priority(builder, endpoint, overrides).await?,
-                )
+                Optional::Specified(Specified::new_with_priority(endpoint, attrs).await?)
             }
-            None => Optional::Unspecified(Unspecified::new_with_priority(builder, overrides)?),
+            None => Optional::Unspecified(Unspecified::new_with_priority(attrs)?),
         };
 
         Ok(env)

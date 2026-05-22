@@ -18,7 +18,7 @@ use aws_sigv4::{
     sign::v4::{self, signing_params::BuildError},
 };
 
-use crate::{impl_opt, Opt};
+use crate::{config, impl_opt, Authentication, Opt};
 
 #[derive(thiserror::Error, Debug)]
 /// SigningError will be returned from the builder when any issues arise
@@ -102,6 +102,27 @@ pub struct SigV4 {
     service: Option<String>,
     /// credentials hold the AWS credentials for the builder
     credentials: Option<Credentials>,
+}
+
+impl Authentication for SigV4 {
+    fn authorize(
+        &self,
+        builder: reqwest::RequestBuilder,
+    ) -> crate::Result<reqwest::RequestBuilder> {
+        Ok(builder)
+    }
+
+    fn sign(&self, req: Request) -> crate::Result<Request> {
+        Ok(SigV4::sign(&self, req)?)
+    }
+}
+
+impl TryFrom<config::SigV4> for SigV4 {
+    type Error = crate::Error;
+
+    fn try_from(value: config::SigV4) -> Result<Self, Self::Error> {
+        futures::executor::block_on(SigV4::new(value.profile.as_ref(), value.service.as_ref()))
+    }
 }
 
 impl SigV4 {

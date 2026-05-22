@@ -16,11 +16,11 @@ use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use crate::{oauth::BrowserAuthorizer, Result};
+use crate::{oauth::BrowserAuthorizer, Authentication, Result};
 
 use super::{token_file_contents::TokenFileContents, Authorizer};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OAuth<T: Authorizer> {
     client_id: ClientId,
     client_secret: ClientSecret,
@@ -33,6 +33,20 @@ pub struct OAuth<T: Authorizer> {
     token_contents: Arc<RwLock<TokenFileContents>>,
     #[serde(skip, default)]
     authorizer: T,
+}
+
+impl<T: Authorizer> std::fmt::Debug for OAuth<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuth")
+            .field("client_id", &self.client_id)
+            .field("client_secret", &self.client_secret)
+            .field("authorization_url", &self.authorization_url)
+            .field("token_url", &self.token_url)
+            .field("redirect_url", &self.redirect_url)
+            .field("scopes", &self.scopes)
+            .field("token_contents", &self.token_contents)
+            .finish()
+    }
 }
 
 /// implment the TryFrom trait for any Authorizer that specifies a default
@@ -73,14 +87,14 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
     }
 }
 
-impl<T: Authorizer> OAuth<T> {
-    /// sign will take the existing token and apply it
-    /// to the header.
-    pub fn authorize(&self, builder: RequestBuilder) -> Result<RequestBuilder> {
+impl<T: Authorizer + Sync + Send> Authentication for OAuth<T> {
+    fn authorize(&self, builder: RequestBuilder) -> Result<RequestBuilder> {
         let token = self.fetch_token()?;
         Ok(builder.bearer_auth(token.into_secret()))
     }
+}
 
+impl<T: Authorizer> OAuth<T> {
     pub fn fetch_token(&self) -> Result<AccessToken> {
         // First check if the contents are in memory, if they are and aren't expired let's return that
         let token_contents = self.token_contents.read().unwrap();
@@ -214,6 +228,8 @@ mod tests {
     use reqwest::ClientBuilder;
     use serde_json::json;
     use tokio::runtime::Runtime;
+
+    use crate::Authentication as _;
 
     use super::{OAuth, TokenFileContents};
 

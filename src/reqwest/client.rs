@@ -1,9 +1,7 @@
 use crate::{impl_opt, impl_when, Error, Result};
 
-use duration_string::DurationString;
 use reqwest::{Certificate, ClientBuilder};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::{fs, path::Path, time::Duration};
 
 // KlaClientBuilder is a trait that adds additional functionality to the reqwest::ClientBuilder
@@ -129,7 +127,7 @@ impl KlaClientBuilder for ClientBuilder {
             return Ok(self);
         }
 
-        let timeout: Duration = match DurationString::from_str(timeout.unwrap()) {
+        let timeout: Duration = match duration_str::parse(timeout.unwrap()) {
             Ok(v) => Ok(v),
             Err(msg) => Err(Error::from(msg.as_str())),
         }?

@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use reqwest::{Client, ClientBuilder};
 
-use crate::{Environment, Result};
+use crate::{config, Attributes, Environment, Result, WithAttributes};
 
 #[derive(Clone, Debug)]
 /// Unspecified is an environment which does not have any configured
@@ -10,27 +10,25 @@ use crate::{Environment, Result};
 /// specified
 pub struct Unspecified {
     name: String,
+    attrs: Attributes,
     client: Client,
 }
 
 impl Unspecified {
     /// new is just shorthand for Self::default(). This creates a default
     /// reqwest::Client for making the requests, and a name of "default"
-    pub fn new(builder: ClientBuilder) -> Result<Self> {
-        Self::new_with_priority(builder, |b| Ok(b))
+    pub fn new(attrs: config::Attributes) -> Result<Self> {
+        Self::new_with_priority(attrs)
     }
 
     /// new_with_priority creates an unspecified environment where you get to
     /// alter the client build attributes.
-    pub fn new_with_priority<F>(builder: ClientBuilder, overrides: F) -> Result<Self>
-    where
-        F: FnOnce(ClientBuilder) -> Result<ClientBuilder>,
-    {
-        let b = overrides(builder)?;
-
+    pub fn new_with_priority(attrs: config::Attributes) -> Result<Self> {
+        let attrs = attrs.try_into()?;
         Ok(Self {
             name: String::from("default"),
-            client: b.build()?,
+            client: ClientBuilder::new().with_attributes(&attrs)?.build()?,
+            attrs,
         })
     }
 }
@@ -41,6 +39,7 @@ impl Default for Unspecified {
     fn default() -> Self {
         Self {
             name: String::from("default"),
+            attrs: Attributes::default(),
             client: Default::default(),
         }
     }
@@ -55,10 +54,9 @@ impl Environment for Unspecified {
         M: TryInto<http::Method, Error = E>,
         U: reqwest::IntoUrl,
     {
-        let req = self
-            .client
-            .request(method.try_into().map_err(E::into)?, url.into_url()?);
-        Ok(req)
+        self.client
+            .request(method.try_into().map_err(E::into)?, url.into_url()?)
+            .with_attributes(&self.attrs)
     }
 
     /// Execute renders the request

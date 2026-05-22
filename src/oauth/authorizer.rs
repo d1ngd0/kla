@@ -10,7 +10,7 @@ pub trait Authorizer {
 }
 
 /// Ability to turn a closure into an authorizer for one off stuff
-impl<T: Fn(Url, CsrfToken) -> Result<AuthorizationCode>> Authorizer for T {
+impl<T: Fn(Url, CsrfToken) -> Result<AuthorizationCode> + Send + Sync> Authorizer for T {
     fn authorize(&self, url: Url, csrf: CsrfToken) -> Result<AuthorizationCode> {
         self(url, csrf)
     }

@@ -10,8 +10,8 @@ use tera::{Context, Tera};
 use crate::clap::arg_file_value;
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
-    Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, Output, OutputBuilder, Result,
-    Sigv4Request, WithAttributes,
+    Attributes, Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, Output, OutputBuilder,
+    Result, Sigv4Request, WithAttributes as _,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -152,6 +152,7 @@ impl Template {
         // Environnment and Template should be hidden behind a single implementation
         // see `with_environment` trait, do the same for template
         // Only arg level should be specified here.
+        let tmpl_attrs: Attributes = self.config.attrs.as_ref().try_into()?;
         let request = env
             .request(
                 self.tmpl
@@ -164,7 +165,7 @@ impl Template {
                     .render("uri", &context)
                     .with_context(|| format!("could not render uri template"))?,
             )?
-            .with_some_result(self.config.attr.as_ref(), RequestBuilder::with_attributes)?
+            .with_attributes(&tmpl_attrs)?
             .with_some(
                 self.tmpl
                     .render("body", &context)

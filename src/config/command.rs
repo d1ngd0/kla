@@ -10,7 +10,7 @@ use inquire::Password;
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
-use crate::{Attributes, Ok, Opt, RenderGroup};
+use crate::{config::Attributes, Ok, Opt, RenderGroup};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
@@ -50,8 +50,8 @@ pub struct ConfigCommand {
     pub output: Option<String>,
     #[serde(rename = "output_failure")]
     pub output_failure: Option<String>,
-    #[serde(rename = "settings")]
-    pub attr: Option<Attributes>,
+    #[serde(rename = "settings", default)]
+    pub attrs: Attributes,
 }
 
 // default_uri specifies the default uri when one is not supplied
@@ -140,7 +140,7 @@ impl ConfigCommand {
     /// resolve_working_dir will go through all the fields that are paths
     /// and resolve them to the provided working dir if they are relative
     pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
-        self.attr.as_mut().map(|s| s.resolve_working_dir(dir));
+        self.attrs.resolve_working_dir(dir);
     }
 
     fn with_subcommands<P: AsRef<Path>>(self, path: P) -> Result<Self, crate::Error> {

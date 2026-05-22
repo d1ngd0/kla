@@ -1,17 +1,20 @@
 mod command;
 pub use command::*;
 
-mod request;
-pub use request::Endpoint;
+mod endpoint;
+pub use endpoint::*;
 
-mod client;
-pub use client::*;
+mod attributes;
+pub use attributes::*;
 
 mod collection;
 pub use collection::*;
 
 mod oauth;
 pub use oauth::*;
+
+mod sigv4;
+pub use sigv4::*;
 
 mod config;
 pub use config::Config;

@@ -2,7 +2,7 @@ use std::{collections::HashMap, future::Future, ops::Deref, path::Path, sync::Ar
 
 use reqwest::Response;
 
-use crate::{Environment, EnvironmentLoader, Result};
+use crate::{config, Environment, EnvironmentLoader, Result};
 
 #[derive(Clone, Debug)]
 /// CachingLoader will load environments but cache their clients for future use
@@ -35,14 +35,13 @@ impl<E: Environment, L: EnvironmentLoader<E> + Copy> EnvironmentLoader<CachedEnv
     /// for later retrieval. On each call it will check the hashmap first and return any value
     /// found. IT ONLY CHECKS ON env NAME. Which means any overrides specified will only work
     /// on the first call.
-    async fn async_load_environment_with_priority<S, F>(
+    async fn async_load_environment_with_priority<S>(
         self,
         name: S,
-        overrides: F,
+        attrs: config::Attributes,
     ) -> crate::Result<CachedEnvironment<E>>
     where
         S: AsRef<str>,
-        F: FnOnce(reqwest::ClientBuilder) -> crate::Result<reqwest::ClientBuilder>,
     {
         let name = name.as_ref();
         match self.envs.get(name) {
@@ -50,7 +49,7 @@ impl<E: Environment, L: EnvironmentLoader<E> + Copy> EnvironmentLoader<CachedEnv
             None => {
                 let env = self
                     .env_loader
-                    .async_load_environment_with_priority(name, overrides)
+                    .async_load_environment_with_priority(name, attrs)
                     .await?;
 
                 let env = CachedEnvironment::new(env);
@@ -68,18 +67,17 @@ impl<E: Environment, L: EnvironmentLoader<E>> EnvironmentLoader<CachedEnvironmen
     /// load_environment_with_priority will load the environment and return it as a
     /// cachedEnvironment, however since this impelemtation of the call consumes the
     /// loader we don't actually cache anything
-    async fn async_load_environment_with_priority<S, F>(
+    async fn async_load_environment_with_priority<S>(
         self,
         name: S,
-        overrides: F,
+        attrs: config::Attributes,
     ) -> crate::Result<CachedEnvironment<E>>
     where
         S: AsRef<str>,
-        F: FnOnce(reqwest::ClientBuilder) -> crate::Result<reqwest::ClientBuilder>,
     {
         let env = self
             .env_loader
-            .async_load_environment_with_priority(name, overrides)
+            .async_load_environment_with_priority(name, attrs)
             .await?;
         Ok(CachedEnvironment::new(env))
     }

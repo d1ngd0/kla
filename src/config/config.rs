@@ -14,8 +14,8 @@ pub struct Config {
     #[serde(rename = "default_environment")]
     pub default_environment: Option<PathBuf>,
 
-    #[serde(rename = "settings")]
-    pub default_client: Option<Attributes>,
+    #[serde(rename = "settings", default)]
+    pub default_client: Attributes,
 
     #[serde(rename = "config", default)]
     pub sub_configs: Vec<SubConfig>,
@@ -30,16 +30,15 @@ pub struct Config {
 impl EnvironmentLoader<Specified> for &Config {
     /// load_environment_with_priority will load a Specified environment from the configuration
     /// and overrides provided.
-    async fn async_load_environment_with_priority<S, F>(
+    async fn async_load_environment_with_priority<S>(
         self,
         env: S,
-        overrides: F,
+        attrs: Attributes,
     ) -> Result<Specified>
     where
         S: AsRef<str>,
-        F: FnOnce(reqwest::ClientBuilder) -> Result<reqwest::ClientBuilder>,
     {
-        Specified::from_config_with_priority(env, self, overrides).await
+        Specified::from_config_with_priority(env, self, attrs).await
     }
 }
 
@@ -102,9 +101,7 @@ impl Config {
             }
         });
 
-        self.default_client
-            .as_mut()
-            .map(|a| a.resolve_working_dir(dir));
+        self.default_client.resolve_working_dir(dir);
     }
 
     pub fn from_list<S, I>(list: I) -> Result<Self>

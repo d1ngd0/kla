@@ -10,7 +10,7 @@ use super::Config;
 #[serde(tag = "type")]
 pub enum SubConfig {
     #[serde(rename = "file")]
-    File { path: PathBuf }, // TODO: Make into PathBuf
+    File { path: PathBuf },
     #[serde(rename = "dir")]
     Dir { path: PathBuf },
 }

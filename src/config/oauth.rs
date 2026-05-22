@@ -65,7 +65,7 @@ impl TryFrom<ClientSecret> for oauth2::ClientSecret {
 mod test {
     use oauth2::{AuthUrl, ClientId, Scope, TokenUrl};
 
-    use crate::OAuth;
+    use super::OAuth;
 
     type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -86,7 +86,7 @@ mod test {
         let oauth_config: OAuth = serde_json::from_str(&s)?;
         let expected = OAuth {
             client_id: ClientId::new("testvalue".into()),
-            client_secret: crate::ClientSecret::File("/tmp/something".into()),
+            client_secret: super::ClientSecret::File("/tmp/something".into()),
             authorization_url: AuthUrl::new("https://localhost:9999".into())?,
             token_url: TokenUrl::new("https://localhost:9999".into())?,
             scopes: vec![Scope::new("testvalue".into())],
@@ -100,16 +100,16 @@ mod test {
         assert_eq!(oauth_config.scopes, expected.scopes);
 
         match (oauth_config.client_secret, expected.client_secret) {
-            (crate::ClientSecret::File(path_a), crate::ClientSecret::File(path_b)) => {
+            (super::ClientSecret::File(path_a), super::ClientSecret::File(path_b)) => {
                 assert_eq!(path_a, path_b)
             }
-            (crate::ClientSecret::File(_), crate::ClientSecret::Value(_)) => {
+            (super::ClientSecret::File(_), super::ClientSecret::Value(_)) => {
                 assert!(false, "got File and Value")
             }
-            (crate::ClientSecret::Value(_), crate::ClientSecret::File(_)) => {
+            (super::ClientSecret::Value(_), super::ClientSecret::File(_)) => {
                 assert!(false, "got Value and File")
             }
-            (crate::ClientSecret::Value(csa), crate::ClientSecret::Value(csb)) => {
+            (super::ClientSecret::Value(csa), super::ClientSecret::Value(csb)) => {
                 assert_eq!(csa.secret(), csb.secret())
             }
         }

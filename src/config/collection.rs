@@ -1,7 +1,7 @@
 use std::{cell::RefCell, fs, ops::Deref, path::Path, rc::Rc};
 
 use crate::{
-    config::command::ConfigArgCollection, CachedEnvironment, CachingLoader, ConfigCommand,
+    config::command::ConfigArgCollection, config::ConfigCommand, CachedEnvironment, CachingLoader,
     Environment, EnvironmentLoader, Ok as _, Opt as _, Output, Result, Specified, Template,
     TemplateBuilder,
 };
