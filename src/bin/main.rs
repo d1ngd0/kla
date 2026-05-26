@@ -251,7 +251,7 @@ async fn run_run<S: Into<String>>(
     // Get the environment
     let env = Optional::from_config_with_priority(ENV.get(), conf, &attrs)
         .await
-        .with_context(|| format!("could not load environment: {:?}", ENV.get(),))?;
+        .with_context(|| format!("could not load environment: {:?}", ENV.get()))?;
     debug!("Running under environment {:#?}", env);
 
     // Get the configuration for the template in the environment

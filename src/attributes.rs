@@ -1,5 +1,6 @@
 use std::{fs::read_to_string, sync::Arc, time::Duration};
 
+use anyhow::Context;
 use http::Version;
 use reqwest::{redirect, ClientBuilder, Proxy, Request, RequestBuilder};
 
@@ -61,7 +62,10 @@ impl TryFrom<config::Attributes> for Attributes {
     fn try_from(value: config::Attributes) -> std::result::Result<Self, Self::Error> {
         let proxy_auth = value
             .proxy_auth_path
-            .map(|s| read_to_string(s))
+            .map(|s| {
+                read_to_string(s.as_path())
+                    .with_context(|| format!("could not read file {:?}", s.as_path()))
+            })
             .transpose()?
             .or(value.proxy_auth)
             .map(|s| {
