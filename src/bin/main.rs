@@ -67,7 +67,7 @@ async fn main() {
     match run().await {
         Ok(_) => (),
         Err(err) => {
-            println!("{:?}", err);
+            println!("{:#}", err);
             exit(1);
         }
     }
@@ -172,7 +172,7 @@ async fn run() -> Result<(), anyhow::Error> {
     };
 
     if let Err(err) = r {
-        log::error!("{}", err);
+        log::error!("{:#}", err);
         exit(1);
     }
     Ok(())
