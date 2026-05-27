@@ -225,6 +225,10 @@ impl Attributes {
                 *cert = PathBuf::from(dir.as_ref()).join(cert.as_path())
             }
         }
+
+        self.auth
+            .as_mut()
+            .map(|f| f.resolve_working_dir(dir.as_ref()));
     }
 }
 
