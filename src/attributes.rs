@@ -102,13 +102,13 @@ impl TryFrom<config::Attributes> for Attributes {
                 .transpose()?
                 .unwrap_or_default(),
             // TODO these are all negated which is weird.
-            gzip: !value.no_gzip.unwrap_or(true),
-            brotli: !value.no_brotli.unwrap_or(true),
-            deflate: !value.no_deflate.unwrap_or(true),
+            gzip: !value.no_gzip,
+            brotli: !value.no_brotli,
+            deflate: !value.no_deflate,
 
-            accept_invalid_certs: value.accept_invalid_certs.unwrap_or(false),
-            accept_invalid_hostnames: value.accept_invalid_hostnames.unwrap_or(false),
-            redirect_policy: Arc::new(if value.no_redirects.unwrap_or(false) {
+            accept_invalid_certs: value.accept_invalid_certs,
+            accept_invalid_hostnames: value.accept_invalid_hostnames,
+            redirect_policy: Arc::new(if value.no_redirects {
                 redirect::Policy::none()
             } else {
                 redirect::Policy::limited(value.max_redirects.unwrap_or(DEFAULT_MAX_REDIRECTS))
@@ -134,7 +134,7 @@ impl TryFrom<config::Attributes> for Attributes {
                 })
                 .transpose()?
                 .unwrap_or_else(|| Arc::new(NoopAuth::default())),
-            verbose: value.verbose.unwrap_or_default(),
+            verbose: value.verbose,
         })
     }
 }

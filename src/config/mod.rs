@@ -21,3 +21,6 @@ pub use config::Config;
 
 mod sub_config;
 pub use sub_config::SubConfig;
+
+mod authentication;
+pub use authentication::*;

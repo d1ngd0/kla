@@ -121,7 +121,7 @@ impl Environment for Specified {
 
     async fn execute(&self, request: reqwest::Request) -> Result<reqwest::Response> {
         self.client
-            .execute(request)
+            .execute(request.with_attributes(&self.attr)?)
             .await
             .map_err(reqwest::Error::into)
     }

@@ -6,11 +6,9 @@ use serde::{Deserialize, Serialize};
 use skim::SkimItem;
 use tera::Value;
 
-use crate::config::{Attributes, OAuth};
+use crate::config::Attributes;
 
-use super::SigV4;
-
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 /// Endpoint is a configured environment that specifies a prefix, name, template_dir
 /// etc. This struct is the configuration for the final environment that we build
 pub struct Endpoint {
@@ -98,29 +96,5 @@ impl SkimItem for Endpoint {
             write!(f, "\n{}\n", long_description).unwrap();
         }
         skim::ItemPreview::Text(f)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(tag = "type")]
-pub enum Authentication {
-    SigV4(SigV4),
-    OAuth(OAuth),
-    None,
-}
-
-impl Default for Authentication {
-    fn default() -> Self {
-        return Authentication::None;
-    }
-}
-
-impl Authentication {
-    pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
-        match self {
-            Authentication::SigV4(_) => (),
-            Authentication::OAuth(oauth) => oauth.resolve_working_dir(dir.as_ref()),
-            Authentication::None => (),
-        }
     }
 }

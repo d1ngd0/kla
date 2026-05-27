@@ -14,29 +14,36 @@ pub struct Attributes {
     pub bearer_token: Option<String>,
     pub bearer_token_path: Option<PathBuf>,
     pub http_version: Option<String>,
-    pub no_gzip: Option<bool>,
-    pub no_brotli: Option<bool>,
-    pub no_deflate: Option<bool>,
+    #[serde(default)]
+    pub no_gzip: bool,
+    #[serde(default)]
+    pub no_brotli: bool,
+    #[serde(default)]
+    pub no_deflate: bool,
     pub max_redirects: Option<usize>,
-    pub no_redirects: Option<bool>,
+    #[serde(default)]
+    pub no_redirects: bool,
     pub proxy: Option<String>,
     pub proxy_http: Option<String>,
     pub proxy_https: Option<String>,
     pub proxy_auth: Option<String>,
     pub proxy_auth_path: Option<PathBuf>,
     pub connect_timeout: Option<String>,
-    pub accept_invalid_certs: Option<bool>,
-    pub accept_invalid_hostnames: Option<bool>,
+    #[serde(default)]
+    pub accept_invalid_certs: bool,
+    #[serde(default)]
+    pub accept_invalid_hostnames: bool,
+    pub auth: Option<Authentication>,
+    #[serde(default)]
+    pub verbose: bool,
     #[serde(default)]
     pub certificate: Vec<PathBuf>,
-    pub auth: Option<Authentication>,
-    pub verbose: Option<bool>,
 }
 
 impl Attributes {
     pub fn clap_flags(cmd: Command) -> Command {
         cmd
-        .arg(arg!(--agent <AGENT> "The header agent string").default_value("kla"))
+        .arg(arg!(--agent <AGENT> "The header agent string"))
         .arg(arg!(--timeout <SECONDS> "The amount of time allotted for the request to finish"))
         .arg(arg!(--"basic-auth" <BASIC_AUTH> "The username and password seperated by :, a preceding @ denotes a file path."))
         .arg(arg!(--"bearer-token" <BEARER_TOKEN> "The bearer token to use in requests. A preceding @ denotes a file path."))
@@ -67,7 +74,7 @@ You should think very carefully before you use this method. If hostname verifica
     // merge applies values in the secondary to anything not in the primary and returns
     // a new Attributes type
     pub fn merge(&self, secondary: &Self) -> Self {
-        Self {
+        let s = Self {
             agent: self.agent.clone().or_else(|| secondary.agent.clone()),
             timeout: self.timeout.clone().or_else(|| secondary.timeout.clone()),
             basic_auth: self
@@ -90,11 +97,11 @@ You should think very carefully before you use this method. If hostname verifica
                 .http_version
                 .clone()
                 .or_else(|| secondary.http_version.clone()),
-            no_gzip: self.no_gzip.or(secondary.no_gzip),
-            no_brotli: self.no_brotli.or(secondary.no_brotli),
-            no_deflate: self.no_deflate.or(secondary.no_deflate),
+            no_gzip: self.no_gzip || secondary.no_gzip,
+            no_brotli: self.no_brotli || secondary.no_brotli,
+            no_deflate: self.no_deflate || secondary.no_deflate,
             max_redirects: self.max_redirects.or(secondary.max_redirects),
-            no_redirects: self.no_redirects.or(secondary.no_redirects),
+            no_redirects: self.no_redirects || secondary.no_redirects,
             proxy: self.proxy.clone().or_else(|| secondary.proxy.clone()),
             proxy_http: self
                 .proxy_http
@@ -116,10 +123,9 @@ You should think very carefully before you use this method. If hostname verifica
                 .connect_timeout
                 .clone()
                 .or_else(|| secondary.connect_timeout.clone()),
-            accept_invalid_certs: self.accept_invalid_certs.or(secondary.accept_invalid_certs),
-            accept_invalid_hostnames: self
-                .accept_invalid_hostnames
-                .or(secondary.accept_invalid_hostnames),
+            accept_invalid_certs: self.accept_invalid_certs || secondary.accept_invalid_certs,
+            accept_invalid_hostnames: self.accept_invalid_hostnames
+                || secondary.accept_invalid_hostnames,
             certificate: self
                 .certificate
                 .clone()
@@ -127,8 +133,10 @@ You should think very carefully before you use this method. If hostname verifica
                 .chain(secondary.certificate.clone().into_iter())
                 .collect(),
             auth: self.auth.clone().or_else(|| secondary.auth.clone()),
-            verbose: self.verbose.or(secondary.verbose),
-        }
+            verbose: self.verbose || secondary.verbose,
+        };
+        log::debug!("Attributes Merged {:?}", s);
+        s
     }
 }
 
@@ -143,19 +151,37 @@ impl From<&ArgMatches> for Attributes {
             bearer_token: None,
             bearer_token_path: None,
             http_version: args.get_one::<String>("http-version").map(String::from),
-            no_gzip: args.get_one::<bool>("no-gzip").map(|f| *f),
-            no_brotli: args.get_one::<bool>("no-brotli").map(|f| *f),
-            no_deflate: args.get_one::<bool>("no-deflate").map(|f| *f),
+            no_gzip: args
+                .get_one::<bool>("no-gzip")
+                .map(|f| *f)
+                .unwrap_or_default(),
+            no_brotli: args
+                .get_one::<bool>("no-brotli")
+                .map(|f| *f)
+                .unwrap_or_default(),
+            no_deflate: args
+                .get_one::<bool>("no-deflate")
+                .map(|f| *f)
+                .unwrap_or_default(),
             max_redirects: args.get_one::<usize>("max-redirects").map(|f| *f),
-            no_redirects: args.get_one::<bool>("no-redirects").map(|f| *f),
+            no_redirects: args
+                .get_one::<bool>("no-redirects")
+                .map(|f| *f)
+                .unwrap_or_default(),
             proxy: args.get_one::<String>("proxy").map(String::from),
             proxy_http: args.get_one::<String>("proxy-http").map(String::from),
             proxy_https: args.get_one::<String>("proxy-https").map(String::from),
             proxy_auth: args.get_one::<String>("proxy-auth").map(String::from),
             proxy_auth_path: args.get_one::<String>("proxy-auth-file").map(PathBuf::from),
             connect_timeout: args.get_one::<String>("timeout").map(String::from),
-            accept_invalid_certs: args.get_one::<bool>("accept-invalid-certs").map(|f| *f),
-            accept_invalid_hostnames: args.get_one::<bool>("accept-invalid-hostnames").map(|f| *f),
+            accept_invalid_certs: args
+                .get_one::<bool>("accept-invalid-certs")
+                .map(|f| *f)
+                .unwrap_or_default(),
+            accept_invalid_hostnames: args
+                .get_one::<bool>("accept-invalid-hostnames")
+                .map(|f| *f)
+                .unwrap_or_default(),
             certificate: args
                 .get_many::<String>("certificate")
                 .unwrap_or_default()
@@ -163,11 +189,7 @@ impl From<&ArgMatches> for Attributes {
                 .collect(),
             // TODO: Authentication methods should all be flaggable
             auth: None,
-            verbose: if args.get_count("verbose") > 0 {
-                Some(true)
-            } else {
-                None
-            },
+            verbose: args.get_count("verbose") > 0,
         }
     }
 }
