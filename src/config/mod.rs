@@ -19,6 +19,9 @@ pub use sigv4::*;
 mod basic_auth;
 pub use basic_auth::*;
 
+mod bearer_token;
+pub use bearer_token::*;
+
 mod config;
 pub use config::Config;
 
