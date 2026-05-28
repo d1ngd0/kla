@@ -9,8 +9,6 @@ use serde::{Deserialize, Serialize};
 pub struct Attributes {
     pub agent: Option<String>,
     pub timeout: Option<String>,
-    pub bearer_token: Option<String>,
-    pub bearer_token_path: Option<PathBuf>,
     pub http_version: Option<String>,
     #[serde(default)]
     pub no_gzip: bool,
@@ -75,14 +73,6 @@ You should think very carefully before you use this method. If hostname verifica
         let s = Self {
             agent: self.agent.clone().or_else(|| secondary.agent.clone()),
             timeout: self.timeout.clone().or_else(|| secondary.timeout.clone()),
-            bearer_token: self
-                .bearer_token
-                .clone()
-                .or_else(|| secondary.bearer_token.clone()),
-            bearer_token_path: self
-                .bearer_token_path
-                .clone()
-                .or_else(|| secondary.bearer_token_path.clone()),
             http_version: self
                 .http_version
                 .clone()
@@ -135,9 +125,6 @@ impl From<&ArgMatches> for Attributes {
         Self {
             agent: args.get_one::<String>("agent").map(String::from),
             timeout: args.get_one::<String>("timeout").map(String::from),
-            // TODO: These should be fixed once this is part of the environment
-            bearer_token: None,
-            bearer_token_path: None,
             http_version: args.get_one::<String>("http-version").map(String::from),
             no_gzip: args
                 .get_one::<bool>("no-gzip")
@@ -184,14 +171,6 @@ impl From<&ArgMatches> for Attributes {
 
 impl Attributes {
     pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
-        self.bearer_token_path = self.bearer_token_path.take().map(|f| {
-            if f.is_relative() {
-                PathBuf::from(dir.as_ref()).join(f)
-            } else {
-                f
-            }
-        });
-
         self.proxy_auth_path = self.proxy_auth_path.take().map(|f| {
             if f.is_relative() {
                 PathBuf::from(dir.as_ref()).join(f)

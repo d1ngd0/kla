@@ -98,9 +98,10 @@ impl ConfigCommand {
     where
         P: AsRef<Path>,
     {
-        // TODO: Fix this unwrap
-        let dir = absolute(&path.as_ref())?;
-        let dir = dir.parent().unwrap();
+        let dir = absolute(path.as_ref())?;
+        let dir = dir
+            .parent()
+            .with_context(|| format!("issue reading absolute path for {:?}", path.as_ref()))?;
 
         let name = path
             .as_ref()

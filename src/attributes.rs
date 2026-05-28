@@ -173,21 +173,6 @@ impl WithAttributes for RequestBuilder {
     type Error = crate::Error;
 
     fn with_attributes(self, attr: &Attributes) -> std::result::Result<Self, Self::Error> {
-        // TODO: Add all this shit back in as authorization
-        // .with_some_result(attr.bearer_token_path.as_ref(), |builder, path| {
-        //     let contents = read_to_string(path)?;
-        //     Ok(builder.bearer_auth(contents))
-        // })?
-        // .with_some(attr.bearer_token.as_ref(), RequestBuilder::bearer_auth)
-        // .with_some_result(attr.basic_auth.as_ref(), |builder, path| {
-        //     let contents = read_to_string(path)?;
-        //     let mut parts = contents.splitn(2, ":");
-        //     Ok(builder.basic_auth(parts.next().unwrap(), parts.next()))
-        // })?
-        // .with_some(attr.basic_auth.as_ref(), |b, basic_auth| {
-        //     let mut parts = basic_auth.splitn(2, ":");
-        //     b.basic_auth(parts.next().unwrap(), parts.next())
-        // })
         let b = self.timeout(attr.timeout).version(attr.http_version);
         attr.auth.authorize(b)
     }

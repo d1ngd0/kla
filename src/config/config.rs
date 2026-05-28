@@ -47,9 +47,10 @@ impl Config {
     where
         P: AsRef<Path>,
     {
-        // TODO: Fix this unwrap
-        let dir = absolute(&path.as_ref())?;
-        let dir = dir.parent().unwrap();
+        let dir = absolute(path.as_ref())?;
+        let dir = dir
+            .parent()
+            .with_context(|| format!("could not derive absolute path of {:?}", path.as_ref()))?;
 
         let mut config = fs::read_to_string(path.as_ref())
             .with_context(|| format!("could not read file {:?}", path.as_ref()))

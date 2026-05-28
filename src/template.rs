@@ -145,13 +145,6 @@ impl Template {
 
         debug!("Context for template {:#?}", &context);
 
-        // TODO: Think through these, they should be applied in the following order
-        // - Environment specific configuration
-        // - Template specific configuration
-        // - argMatch specific configuration
-        // Environnment and Template should be hidden behind a single implementation
-        // see `with_environment` trait, do the same for template
-        // Only arg level should be specified here.
         let tmpl_attrs: Attributes = self.config.attrs.as_ref().try_into()?;
         let request = env
             .request(
