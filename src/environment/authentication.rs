@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{config, oauth::OAuth, Result, SigV4};
+use crate::{basic_auth::BasicAuth, config, oauth::OAuth, Result, SigV4};
 use reqwest::{Request, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +30,10 @@ impl TryFrom<config::Authentication> for Arc<dyn Authentication> {
             }
             config::Authentication::OAuth(oauth) => {
                 let val: Arc<dyn crate::Authentication> = Arc::new(OAuth::try_from(oauth)?);
+                Ok(val)
+            }
+            config::Authentication::BasicAuth(basic) => {
+                let val: Arc<dyn crate::Authentication> = Arc::new(BasicAuth::try_from(basic)?);
                 Ok(val)
             }
             config::Authentication::None => {

@@ -16,6 +16,9 @@ pub use oauth::*;
 mod sigv4;
 pub use sigv4::*;
 
+mod basic_auth;
+pub use basic_auth::*;
+
 mod config;
 pub use config::Config;
 
@@ -24,3 +27,6 @@ pub use sub_config::SubConfig;
 
 mod authentication;
 pub use authentication::*;
+
+mod helpers;
+pub use helpers::*;

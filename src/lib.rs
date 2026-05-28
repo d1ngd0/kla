@@ -1,4 +1,5 @@
 mod attributes;
+mod basic_auth;
 mod collection;
 mod environment; // environment struct and logic
 mod error; // package error handling

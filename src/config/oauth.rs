@@ -1,10 +1,9 @@
-use std::{
-    fs::read_to_string,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
-use oauth2::{AuthUrl, ClientId, ClientSecret as OauthClientSecret, Scope, TokenUrl};
+use oauth2::{AuthUrl, ClientId, Scope, TokenUrl};
 use serde::{Deserialize, Serialize};
+
+use crate::config::FileOrValue;
 
 // TODO: this should be more configurable, we assume they will use the browser
 // authorizer, but there could be better ways to do this in the future, like a
@@ -26,38 +25,19 @@ impl OAuth {
     /// resolve_working_dir finds any relative paths referenced in the config
     /// and resolves them with `dir` as it's base.
     pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
-        match &self.client_secret {
-            ClientSecret::File(path) => {
-                if path.is_relative() {
-                    self.client_secret = ClientSecret::File(PathBuf::from(dir.as_ref()).join(path))
-                }
-            }
-            ClientSecret::Value(_) => (),
-        }
+        self.client_secret.resolve_working_dir(dir.as_ref())
     }
 }
 
 /// ClientSecret holds a file path or a value to specify the client secret.
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub enum ClientSecret {
-    #[serde(rename = "file")]
-    File(PathBuf),
-    #[serde(rename = "value")]
-    Value(OauthClientSecret),
-}
+pub type ClientSecret = FileOrValue;
 
 impl TryFrom<ClientSecret> for oauth2::ClientSecret {
     type Error = crate::Error;
 
     /// Consume the ClientSecret and return an oauth::ClientSecret
     fn try_from(value: ClientSecret) -> Result<Self, Self::Error> {
-        match value {
-            ClientSecret::File(path) => {
-                let s = read_to_string(path)?;
-                Ok(oauth2::ClientSecret::new(s.replace(['\n', '\r'], "")))
-            }
-            ClientSecret::Value(client_secret) => Ok(client_secret),
-        }
+        Ok(oauth2::ClientSecret::new(value.try_into()?))
     }
 }
 
@@ -75,7 +55,8 @@ mod test {
         {
             "client_id": "testvalue",
             "client_secret": {
-                "file": "/tmp/something"
+              "path": "/tmp/something",
+              "trim": true
             },
             "authorization_url": "https://localhost:9999",
             "token_url": "https://localhost:9999",
@@ -86,7 +67,10 @@ mod test {
         let oauth_config: OAuth = serde_json::from_str(&s)?;
         let expected = OAuth {
             client_id: ClientId::new("testvalue".into()),
-            client_secret: super::ClientSecret::File("/tmp/something".into()),
+            client_secret: super::ClientSecret::File {
+                path: "/tmp/something".into(),
+                trim: true,
+            },
             authorization_url: AuthUrl::new("https://localhost:9999".into())?,
             token_url: TokenUrl::new("https://localhost:9999".into())?,
             scopes: vec![Scope::new("testvalue".into())],
@@ -100,17 +84,26 @@ mod test {
         assert_eq!(oauth_config.scopes, expected.scopes);
 
         match (oauth_config.client_secret, expected.client_secret) {
-            (super::ClientSecret::File(path_a), super::ClientSecret::File(path_b)) => {
+            (
+                super::ClientSecret::File {
+                    path: path_a,
+                    trim: _,
+                },
+                super::ClientSecret::File {
+                    path: path_b,
+                    trim: _,
+                },
+            ) => {
                 assert_eq!(path_a, path_b)
             }
-            (super::ClientSecret::File(_), super::ClientSecret::Value(_)) => {
+            (super::ClientSecret::File { path: _, trim: _ }, super::ClientSecret::Value(_)) => {
                 assert!(false, "got File and Value")
             }
-            (super::ClientSecret::Value(_), super::ClientSecret::File(_)) => {
+            (super::ClientSecret::Value(_), super::ClientSecret::File { path: _, trim: _ }) => {
                 assert!(false, "got Value and File")
             }
             (super::ClientSecret::Value(csa), super::ClientSecret::Value(csb)) => {
-                assert_eq!(csa.secret(), csb.secret())
+                assert_eq!(csa, csb)
             }
         }
 

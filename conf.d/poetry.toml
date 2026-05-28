@@ -7,3 +7,8 @@ short_description = "Poetry by authors"
 # used with `run`
 template_dir = "tmpl/"
 
+  [environment.settings.auth]
+    type = "basic"
+    username = "test"
+    password = "something"
+
