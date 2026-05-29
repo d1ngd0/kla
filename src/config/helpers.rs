@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::Result;
-use inquire::Password;
+use inquire::{Password, PasswordDisplayMode};
 use serde::{Deserialize, Serialize};
 
 /// FileOrValue holds a file with a value in it, or a literal value
@@ -52,9 +52,10 @@ impl SecretValue {
                 }
             }
             SecretValue::Value(value) => Ok(value),
-            SecretValue::Prompt { prompt } => {
-                Ok(Password::new(&format!("{}: ", &prompt)).prompt()?)
-            }
+            SecretValue::Prompt { prompt } => Ok(Password::new(&format!("{}: ", &prompt))
+                .without_confirmation()
+                .with_display_mode(PasswordDisplayMode::Masked)
+                .prompt()?),
         }
     }
 }

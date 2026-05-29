@@ -73,12 +73,13 @@ impl CacheFile {
         // Ok the path doesn't exist, so we need to call the function to create
         // the contents
         let process_contents = constructor()?;
-        fs::write(&self.location, serde_json::to_string(&process_contents)?)?;
-
-        contents.update(FileContents {
+        let process_contents = FileContents {
             content: process_contents.0,
             expires: Local::now() + process_contents.1,
-        });
+        };
+        fs::write(&self.location, serde_json::to_string(&process_contents)?)?;
+
+        contents.update(process_contents);
 
         return Ok(contents
             .fetch()
