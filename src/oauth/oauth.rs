@@ -1,37 +1,28 @@
-use std::{
-    fs::{self, read_to_string},
-    ops::Add as _,
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
+use std::path::PathBuf;
 
-use chrono::{Duration, Local};
+use chrono::Duration;
 use oauth2::{
-    basic::BasicClient, AccessToken, AuthUrl, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
-    RedirectUrl, Scope, TokenResponse as _, TokenUrl,
+    basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, RedirectUrl,
+    Scope, TokenResponse as _, TokenUrl,
 };
 use oauth2_reqwest::ReqwestBlockingClient;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use reqwest::RequestBuilder;
-use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use crate::{oauth::BrowserAuthorizer, Authentication, Result};
+use crate::{filecache::CacheFile, oauth::BrowserAuthorizer, Authentication, Result};
 
-use super::{token_file_contents::TokenFileContents, Authorizer};
+use super::Authorizer;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct OAuth<T: Authorizer> {
     client_id: ClientId,
     client_secret: ClientSecret,
     authorization_url: AuthUrl,
     token_url: TokenUrl,
     redirect_url: RedirectUrl,
-    #[serde(default)]
     scopes: Vec<Scope>,
-    #[serde(skip, default)]
-    token_contents: Arc<RwLock<TokenFileContents>>,
-    #[serde(skip, default)]
+    token: CacheFile,
     authorizer: T,
 }
 
@@ -44,7 +35,7 @@ impl<T: Authorizer> std::fmt::Debug for OAuth<T> {
             .field("token_url", &self.token_url)
             .field("redirect_url", &self.redirect_url)
             .field("scopes", &self.scopes)
-            .field("token_contents", &self.token_contents)
+            .field("token", &self.token)
             .finish()
     }
 }
@@ -69,6 +60,13 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
             auth.redirect_private_key = Some(signing_key.public_key_pem().into());
         }
 
+        let token_name = Self::token_filename(
+            &value.client_id,
+            &value.authorization_url,
+            &value.token_url,
+            &value.scopes,
+        );
+
         let s = Self {
             client_id: value.client_id,
             client_secret: value.client_secret.try_into()?,
@@ -80,7 +78,7 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
                 redirect_port
             ))?,
             scopes: value.scopes,
-            token_contents: Arc::new(RwLock::new(TokenFileContents::default())),
+            token: CacheFile::new(token_name),
             authorizer: auth,
         };
         Ok(s)
@@ -89,70 +87,25 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
 
 impl<T: Authorizer + Sync + Send> Authentication for OAuth<T> {
     fn authorize(&self, builder: RequestBuilder) -> Result<RequestBuilder> {
-        let token = self.fetch_token()?;
-        Ok(builder.bearer_auth(token.into_secret()))
+        let token = self.token.fetch(|| self.oauth_flow())?;
+        Ok(builder.bearer_auth(token))
     }
 }
 
 impl<T: Authorizer> OAuth<T> {
-    pub fn fetch_token(&self) -> Result<AccessToken> {
-        // First check if the contents are in memory, if they are and aren't expired let's return that
-        let token_contents = self.token_contents.read().unwrap();
-        if let Some(token) = token_contents.token() {
-            return Ok(token.clone());
-        }
-        drop(token_contents);
-
-        // The reading stuff is done, we want to make sure we are the only ones doing things
-        // now, so lets get to work by fetching a write lock
-        let mut token_contents = self.token_contents.write().unwrap();
-
-        // it's possible more than one of us got to this point, so let's make sure
-        // a sibling process didn't already update the contents, if they did we
-        // can return and unlock
-        if let Some(token) = token_contents.token() {
-            return Ok(token.clone());
-        }
-
-        // Alright, the contents are not in memory, or the data is old, let's try
-        // to fetch it from the disk, lets generate the name
-        let path = self.token_filename();
-
-        // Now check if the file exists, if it does we can load it into memory, and return the value
-        if path.exists() {
-            let contents = read_to_string(&path)?;
-            let file_contents: TokenFileContents = serde_json::from_str(contents.as_str())?;
-
-            if !file_contents.expired() {
-                token_contents.update(file_contents);
-                return Ok(token_contents
-                    .token()
-                    .expect("We litterally just set the token and it wasn't expired")
-                    .clone());
-            }
-        }
-
-        // Ok the path doesn't exist, so we need to go through the whole oauth process
-        let process_contents = self.token()?;
-        fs::write(&path, serde_json::to_string(&process_contents)?)?;
-
-        token_contents.update(process_contents);
-
-        return Ok(token_contents
-            .token()
-            .expect("We litterally just set the token and it wasn't expired")
-            .clone());
-    }
-
-    pub fn token_filename(&self) -> PathBuf {
+    pub fn token_filename(
+        client: &ClientId,
+        auth: &AuthUrl,
+        token: &TokenUrl,
+        scopes: &[Scope],
+    ) -> PathBuf {
         let mut hasher = Sha256::new();
 
-        hasher.update(self.client_id.as_bytes());
-        hasher.update(self.client_secret.secret());
-        hasher.update(self.authorization_url.as_bytes());
-        hasher.update(self.token_url.as_bytes());
+        hasher.update(client.as_bytes());
+        hasher.update(auth.as_bytes());
+        hasher.update(token.as_bytes());
 
-        for scope in &self.scopes {
+        for scope in scopes {
             hasher.update(scope.as_bytes());
         }
 
@@ -160,7 +113,7 @@ impl<T: Authorizer> OAuth<T> {
         PathBuf::from("/tmp").join(format!("{}.token", hex::encode(hasher.finalize())))
     }
 
-    pub fn token(&self) -> Result<TokenFileContents> {
+    pub fn oauth_flow(&self) -> Result<(String, chrono::Duration)> {
         // Create an OAuth2 client by specifying the client ID, client secret, authorization URL and
         // token URL.
         let client = BasicClient::new(self.client_id.clone())
@@ -202,23 +155,20 @@ impl<T: Authorizer> OAuth<T> {
             .set_pkce_verifier(pkce_verifier)
             .request(&http_client)?;
 
-        Ok(TokenFileContents::new(
-            token_resp.access_token().clone(),
-            Local::now().add(
-                token_resp
-                    .expires_in()
-                    .map(Duration::from_std)
-                    .map(|f| f.ok())
-                    .flatten()
-                    .unwrap_or_else(|| Duration::seconds(300)),
-            ),
+        Ok((
+            token_resp.access_token().clone().into_secret(),
+            token_resp
+                .expires_in()
+                .map(Duration::from_std)
+                .map(|f| f.ok())
+                .flatten()
+                .unwrap_or_else(|| Duration::seconds(300)),
         ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, RwLock};
 
     use http::Method;
     use httpmock::MockServer;
@@ -229,9 +179,9 @@ mod tests {
     use serde_json::json;
     use tokio::runtime::Runtime;
 
-    use crate::Authentication as _;
+    use crate::{filecache::CacheFile, Authentication as _};
 
-    use super::{OAuth, TokenFileContents};
+    use super::OAuth;
 
     type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -297,7 +247,7 @@ mod tests {
             client_secret: ClientSecret::new("2io3fnaldvmaw09evmaisdhfas".into()),
             authorization_url: AuthUrl::new(auth_url.into())?,
             token_url: TokenUrl::new(token_url.into())?,
-            token_contents: Arc::new(RwLock::new(TokenFileContents::default())),
+            token: CacheFile::new("./test"),
             redirect_url: RedirectUrl::new("http://localhost:8085".into())?,
             scopes: vec![
                 Scope::new("read".to_string()),
