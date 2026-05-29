@@ -9,7 +9,7 @@ mod oauth;
 mod opt;
 mod output; // managing the output of kla
 mod reqwest;
-// mod ropc;
+mod ropc;
 mod sigv4;
 mod template;
 mod tera; // templating responses

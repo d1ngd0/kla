@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{BasicAuth, BearerToken, OAuth, SigV4};
+use crate::config::{BasicAuth, BearerToken, OAuth, SigV4, ROPC};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
@@ -15,6 +15,8 @@ pub enum Authentication {
     BasicAuth(BasicAuth),
     #[serde(rename = "bearer")]
     BearerToken(BearerToken),
+    #[serde(rename = "ropc")]
+    ROPC(ROPC),
     #[serde(rename = "none")]
     None,
 }
@@ -32,6 +34,7 @@ impl Authentication {
             Authentication::OAuth(oauth) => oauth.resolve_working_dir(dir.as_ref()),
             Authentication::BasicAuth(basic) => basic.resolve_working_dir(dir.as_ref()),
             Authentication::BearerToken(bearer) => bearer.resolve_working_dir(dir.as_ref()),
+            Authentication::ROPC(ropc) => ropc.resolve_working_dir(dir.as_ref()),
             Authentication::None => (),
         }
     }

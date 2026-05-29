@@ -22,6 +22,9 @@ pub use basic_auth::*;
 mod bearer_token;
 pub use bearer_token::*;
 
+mod ropc;
+pub use ropc::*;
+
 mod config;
 pub use config::Config;
 

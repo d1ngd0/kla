@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    basic_auth::BasicAuth, bearer_token::BearerToken, config, oauth::OAuth, Result, SigV4,
+    basic_auth::BasicAuth, bearer_token::BearerToken, config, oauth::OAuth, ropc::ROPC, Result,
+    SigV4,
 };
 use reqwest::{Request, RequestBuilder};
 use serde::{Deserialize, Serialize};
@@ -40,6 +41,10 @@ impl TryFrom<config::Authentication> for Arc<dyn Authentication> {
             }
             config::Authentication::BearerToken(bearer) => {
                 let val: Arc<dyn crate::Authentication> = Arc::new(BearerToken::try_from(bearer)?);
+                Ok(val)
+            }
+            config::Authentication::ROPC(ropc) => {
+                let val: Arc<dyn crate::Authentication> = Arc::new(ROPC::try_from(ropc)?);
                 Ok(val)
             }
             config::Authentication::None => {

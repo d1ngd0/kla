@@ -12,7 +12,7 @@ path = "src/bin/main.rs"
 [dependencies]
 clap = { version = "4.0.14", features = ["derive", "cargo", "string", "env"] }
 http = "1.0.0"
-reqwest = {version = "0.13", default-features=false,  features = ["blocking", "stream", "gzip", "brotli", "deflate", "rustls", "query", "form"]}
+reqwest = {version = "0.13", default-features=false,  features = ["blocking", "stream", "gzip", "brotli", "deflate", "rustls", "query", "form", "json"]}
 thiserror = "1.0.37"
 tokio = { version = "1.21.2", features = ["full"]}
 toml = "0.5.9"

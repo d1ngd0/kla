@@ -1,6 +1,7 @@
 use std::convert::{From, Infallible};
 use std::error::Error as StdError;
 
+use inquire::InquireError;
 use oauth2::basic::BasicErrorResponseType;
 use oauth2::{HttpClientError, RequestTokenError, StandardErrorResponse};
 
@@ -48,6 +49,8 @@ pub enum Error {
     KeyError(#[from] rcgen::Error),
     #[error("{0}")]
     GenError(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    #[error("{0}")]
+    PromptError(#[from] InquireError),
 }
 
 impl From<&str> for Error {

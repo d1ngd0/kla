@@ -2,11 +2,11 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::FileOrValue;
+use crate::config::SecretValue;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BearerToken {
-    pub token: FileOrValue,
+    pub token: SecretValue,
 }
 
 impl BearerToken {

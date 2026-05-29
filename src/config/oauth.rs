@@ -3,7 +3,7 @@ use std::path::Path;
 use oauth2::{AuthUrl, ClientId, Scope, TokenUrl};
 use serde::{Deserialize, Serialize};
 
-use crate::config::FileOrValue;
+use crate::config::SecretValue;
 
 // TODO: this should be more configurable, we assume they will use the browser
 // authorizer, but there could be better ways to do this in the future, like a
@@ -30,7 +30,7 @@ impl OAuth {
 }
 
 /// ClientSecret holds a file path or a value to specify the client secret.
-pub type ClientSecret = FileOrValue;
+pub type ClientSecret = SecretValue;
 
 impl TryFrom<ClientSecret> for oauth2::ClientSecret {
     type Error = crate::Error;
@@ -43,6 +43,8 @@ impl TryFrom<ClientSecret> for oauth2::ClientSecret {
 
 #[cfg(test)]
 mod test {
+    use std::fs;
+
     use oauth2::{AuthUrl, ClientId, Scope, TokenUrl};
 
     use super::OAuth;
@@ -54,10 +56,7 @@ mod test {
         let s = r#"
         {
             "client_id": "testvalue",
-            "client_secret": {
-              "path": "/tmp/something",
-              "trim": true
-            },
+            "client_secret": "something",
             "authorization_url": "https://localhost:9999",
             "token_url": "https://localhost:9999",
             "scopes": ["testvalue"]
@@ -67,10 +66,7 @@ mod test {
         let oauth_config: OAuth = serde_json::from_str(&s)?;
         let expected = OAuth {
             client_id: ClientId::new("testvalue".into()),
-            client_secret: super::ClientSecret::File {
-                path: "/tmp/something".into(),
-                trim: true,
-            },
+            client_secret: super::ClientSecret::Value("something".into()),
             authorization_url: AuthUrl::new("https://localhost:9999".into())?,
             token_url: TokenUrl::new("https://localhost:9999".into())?,
             scopes: vec![Scope::new("testvalue".into())],
@@ -82,30 +78,10 @@ mod test {
         assert_eq!(oauth_config.authorization_url, expected.authorization_url);
         assert_eq!(oauth_config.token_url, expected.token_url);
         assert_eq!(oauth_config.scopes, expected.scopes);
-
-        match (oauth_config.client_secret, expected.client_secret) {
-            (
-                super::ClientSecret::File {
-                    path: path_a,
-                    trim: _,
-                },
-                super::ClientSecret::File {
-                    path: path_b,
-                    trim: _,
-                },
-            ) => {
-                assert_eq!(path_a, path_b)
-            }
-            (super::ClientSecret::File { path: _, trim: _ }, super::ClientSecret::Value(_)) => {
-                assert!(false, "got File and Value")
-            }
-            (super::ClientSecret::Value(_), super::ClientSecret::File { path: _, trim: _ }) => {
-                assert!(false, "got Value and File")
-            }
-            (super::ClientSecret::Value(csa), super::ClientSecret::Value(csb)) => {
-                assert_eq!(csa, csb)
-            }
-        }
+        assert_eq!(
+            String::try_from(oauth_config.client_secret)?,
+            String::try_from(expected.client_secret)?
+        );
 
         Ok(())
     }
