@@ -1,11 +1,14 @@
 use anyhow::Context;
 
-use crate::{config, Authentication, Error, Result};
+use crate::{
+    config::{self, CachedSecretValue},
+    Authentication, Error, Result,
+};
 
 #[derive(Clone, Debug)]
 pub struct BasicAuth {
-    username: String,
-    password: Option<String>,
+    username: CachedSecretValue,
+    password: Option<CachedSecretValue>,
 }
 
 impl BasicAuth {
@@ -16,15 +19,15 @@ impl BasicAuth {
             username: chunks
                 .next()
                 .context("username not provided in string")?
-                .to_string(),
-            password: chunks.next().map(String::from),
+                .into(),
+            password: chunks.next().map(CachedSecretValue::from),
         })
     }
 
     pub fn new<U, P>(username: U, password: Option<P>) -> BasicAuth
     where
-        U: Into<String>,
-        P: Into<String>,
+        U: Into<CachedSecretValue>,
+        P: Into<CachedSecretValue>,
     {
         BasicAuth {
             username: username.into(),
@@ -37,17 +40,10 @@ impl TryFrom<config::BasicAuth> for BasicAuth {
     type Error = crate::Error;
 
     fn try_from(value: config::BasicAuth) -> std::result::Result<Self, Self::Error> {
-        if let Some(userpass) = value.userpass {
-            let userpass: String = userpass.try_into()?;
-            Self::from_userpass_string(&userpass)
-        } else {
-            Ok(BasicAuth::new(
-                value.username.ok_or_else(|| {
-                    Error::from("username must be supplied when using basic auth")
-                })?,
-                value.password.map(String::try_from).transpose()?,
-            ))
-        }
+        Ok(BasicAuth::new(
+            value.username,
+            value.password.map(String::try_from).transpose()?,
+        ))
     }
 }
 
@@ -56,6 +52,12 @@ impl Authentication for BasicAuth {
         &self,
         builder: reqwest::RequestBuilder,
     ) -> crate::Result<reqwest::RequestBuilder> {
-        Ok(builder.basic_auth(self.username.as_str(), self.password.as_ref()))
+        Ok(builder.basic_auth(
+            self.username.to_string()?,
+            self.password
+                .as_ref()
+                .map(CachedSecretValue::to_string)
+                .transpose()?,
+        ))
     }
 }

@@ -139,12 +139,8 @@ description = """
 A Very long description, though this one isn't
 """
 
-# An argument creates a new `--flag` or `<argument>` that can be used as "Context"
-# This "Context" are key value pairs which can be used within many locations of the
-# template.
-#
-# [[arg]] is an array that we are adding to. For this first one I will specify a
-# real example, the next one will have all the values.
+# [[arg]] is an array that we are adding to. This adds a `message` argument, which will be the first argument to the command since it is the first one specified.
+# Where this argument to specify a `short` or `long` value it would be passed in as a flag instead.
 [[arg]]
   help = "A message that you want to send to the API"
   name = "message"
@@ -162,10 +158,10 @@ A Very long description, though this one isn't
   # - bool
   type = "string"
 
-  # Boolean specifying if this is a list of arguments, or a single argument
+  # Boolean specifying if this is a list of arguments, or a single argument. If true the same flag can be sent multiple times, and the resulting value passed into the body would be an array of values
   many_valued = false
 
-  # short specifies the shorthand flag. If this and `long` are not specified
+  # short specifies the shorthand flag without the preceding -. If this and `long` are not specified
   # the arg is considered a regular argument instead of a flagged argument
   # -c
   short = 'c'
@@ -174,21 +170,19 @@ A Very long description, though this one isn't
   # argument
   short_aliases = ['a', 'b', 'c']
 
-  # long specifies the `--long-flag` form of the argument. If this and short
-  # are not specified it assumes the arg is a normal argument.
+  # long specifies the `--long-flag` form of the argument without the preceding --. If this and short are not specified it assumes the arg is a normal argument.
   long = "my-long-flag"
 
   # Aliases specifies aliases for the `--long-form` flags
   aliases = ["another-long-flag", "what"]
 
-  # help text which is displayed when running `kla run <template> --help`
+  # help text which is displayed when running `kla run <template> -h`
   help = "the help text for the argument"
 
   # long help text which is displayed when running `kla run <template> --help`
   long_help = "the help text for the argument"
 
-  # next_line_help allows you to specify additional text after the help text
-  # has rendered
+  # next_line_help allows you to specify additional text after the help text. This can be useful when there is additional context that must be considered with the flag.
   next_line_help = """
 This is some more text that I really want rendered at the end of the help
 text
@@ -270,10 +264,10 @@ text
   # env specifies the environment variable this value should inherit
   # when not present
   # https://docs.rs/clap/latest/clap/struct.Arg.html#method.env
-  env = "KLA_HTTP_BASIC_AUTH"
+  env = "MY_ENVIRONMENT_VARIABLE"
 
   # There are a collection of hide attributes which attempt to not disclose
-  # sensative information in the help text.
+  # sensitive information in the help text.
 
   # https://docs.rs/clap/latest/clap/struct.Arg.html#method.hide_possible_values
   hide_possible_values = false
@@ -380,9 +374,7 @@ The server failed with the following message:
 """
 
 # output specifies where you would like the output of this template to go
-# usually you want it to go to stdout, which it does by default, but for
-# login endpoints maybe you want to direct things towards a file?
-# this value supports templating
+# usually you want it to go to stdout, which it does by default, but maybe you have a reason to store the output to a specific file.
 output = "~/.cache/my_token"
 
 # Additionally, you might want to redirect the failure output somewhere
@@ -391,26 +383,8 @@ output = "~/.cache/my_token"
 # this value supports templating
 failure_output = "-"
 
-# Settings allow you to specify request level settings for the template.
-[settings]
-# allows you to specify the bearer token header. based on the first character
-# this settings can read from a file
-# `-` => Read from standard input
-# `@` => Read from file (followed by a path `@/tmp/myfile.txt`), if the file doesn't
-#        exist we do not set the value
-# `!` => Read from file (followed by a path `!/tmp/myfile.txt`), if the files doesn't
-#        exists return an error
-# .*  => Read anything else in as the literal value
-bearer_token = ""
-
-# set the basic auth header. This has the same feature set as bearer_token
-basic_auth = ""
-
-# Timeout, configuration defined by https://docs.rs/duration-string/latest/duration_string/index.html
-timeout = "10s"
-
-# Set the HTTP Version, allowed versions are: 0.9, 1.0, 1.1, 2.0, 3.0.
-http_version = "1.0"
+# Settings allow you to specify request level settings for the template. These settings are the same as specified in [environments](000_environments.md).
+# [settings]
 ```
 
 ## Sub Commands
@@ -425,4 +399,4 @@ Each template allows for subcommands, these commands are stored in a subdirector
   └ get.toml 
 ```
 
-The `config.toml` is the parent command, which will load in all the subcommands from `config.subcmd`. These subcommands share the exact same configurations themselves, and can even have their own subcommands!
+The `config.toml` is the parent command, which will load in all the subcommands from `config.subcmd`. Subcommands are nesting, meaning each subcommand can have subcommands of it's own.

@@ -112,6 +112,7 @@ async fn run() -> Result<(), anyhow::Error> {
         Config::from_list(
             [
                 "kla.toml",
+                ".kla.toml",
                 "~/.kla.toml",
                 "~/.config/kla/config.toml",
                 "/etc/kla/config.toml",

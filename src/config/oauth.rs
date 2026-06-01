@@ -10,8 +10,8 @@ use crate::config::SecretValue;
 // proxy that we should support.
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct OAuth {
-    pub client_id: ClientId,
-    pub client_secret: ClientSecret,
+    pub client_id: SecretValue,
+    pub client_secret: SecretValue,
     pub authorization_url: AuthUrl,
     pub redirect_port: Option<u16>,
     #[serde(default)]
@@ -29,23 +29,11 @@ impl OAuth {
     }
 }
 
-/// ClientSecret holds a file path or a value to specify the client secret.
-pub type ClientSecret = SecretValue;
-
-impl TryFrom<ClientSecret> for oauth2::ClientSecret {
-    type Error = crate::Error;
-
-    /// Consume the ClientSecret and return an oauth::ClientSecret
-    fn try_from(value: ClientSecret) -> Result<Self, Self::Error> {
-        Ok(oauth2::ClientSecret::new(value.try_into()?))
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use std::fs;
-
     use oauth2::{AuthUrl, ClientId, Scope, TokenUrl};
+
+    use crate::config::SecretValue;
 
     use super::OAuth;
 
@@ -65,8 +53,8 @@ mod test {
 
         let oauth_config: OAuth = serde_json::from_str(&s)?;
         let expected = OAuth {
-            client_id: ClientId::new("testvalue".into()),
-            client_secret: super::ClientSecret::Value("something".into()),
+            client_id: SecretValue::from("testvalue"),
+            client_secret: SecretValue::from("something"),
             authorization_url: AuthUrl::new("https://localhost:9999".into())?,
             token_url: TokenUrl::new("https://localhost:9999".into())?,
             scopes: vec![Scope::new("testvalue".into())],

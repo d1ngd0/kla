@@ -26,7 +26,7 @@ pub struct Attributes {
 const DEFAULT_AGENT: &str = "kla 0.x";
 const DEFAULT_TIMEOUT_SECONDS: u64 = 900;
 const DEFAULT_CONNECT_TIMEOUT_SECONDS: u64 = 5;
-const DEFAULT_MAX_REDIRECTS: usize = 3;
+const DEFAULT_MAX_REDIRECTS: usize = 10;
 
 impl Default for Attributes {
     fn default() -> Self {

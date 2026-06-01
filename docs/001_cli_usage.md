@@ -68,10 +68,14 @@ $ kla --env poetry /authors
 
 ### Implicit Reference
 
-The final way to specify your environment is by relaying on the currently configured "default environment". You can see what this value is by running `kla env` or `kla environment`. Additionally you can switch between your environments with `kla switch`
+The final way to specify your environment is by relying on the currently configured "default environment". You can see what this value is by running `kla env` or `kla environment`. Additionally you can switch between implicit environments with `kla switch`
 
 ```
-$ kla switch
+$ kla switch poetry
 Switched to environment poetry
 $ kla /authors
 ```
+
+The argument given to switch is an optional regex. If the pattern matches only 1 environment it will be selected. If it matches multiple environments a fuzzy finder interface will help you select.
+
+Running just `kla switch` without a pattern will present you with every environment to select from.

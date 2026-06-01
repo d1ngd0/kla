@@ -1,14 +1,17 @@
-use crate::{config, Authentication};
+use crate::{
+    config::{self, CachedSecretValue},
+    Authentication,
+};
 
 #[derive(Clone, Debug)]
 pub struct BearerToken {
-    token: String,
+    token: CachedSecretValue,
 }
 
 impl BearerToken {
     pub fn new<T>(token: T) -> BearerToken
     where
-        T: Into<String>,
+        T: Into<CachedSecretValue>,
     {
         BearerToken {
             token: token.into(),
@@ -20,7 +23,7 @@ impl TryFrom<config::BearerToken> for BearerToken {
     type Error = crate::Error;
 
     fn try_from(value: config::BearerToken) -> std::result::Result<Self, Self::Error> {
-        Ok(BearerToken::new(String::try_from(value.token)?))
+        Ok(BearerToken::new(value.token))
     }
 }
 
@@ -29,6 +32,6 @@ impl Authentication for BearerToken {
         &self,
         builder: reqwest::RequestBuilder,
     ) -> crate::Result<reqwest::RequestBuilder> {
-        Ok(builder.bearer_auth(self.token.as_str()))
+        Ok(builder.bearer_auth(self.token.to_string()?))
     }
 }

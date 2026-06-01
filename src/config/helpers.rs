@@ -76,6 +76,12 @@ impl TryFrom<SecretValue> for String {
 pub struct CachedSecretValue(Arc<Mutex<Option<SecretValue>>>);
 
 impl CachedSecretValue {
+    pub fn new(sv: SecretValue) -> CachedSecretValue {
+        CachedSecretValue(Arc::new(Mutex::new(Some(sv))))
+    }
+}
+
+impl CachedSecretValue {
     pub fn to_string(&self) -> Result<String> {
         let mut lock = self.0.lock().expect("poisoned lock");
         let val = lock
@@ -84,6 +90,24 @@ impl CachedSecretValue {
             .to_string()?;
         lock.replace(SecretValue::Value(val.clone()));
         Ok(val)
+    }
+}
+
+impl From<SecretValue> for CachedSecretValue {
+    fn from(value: SecretValue) -> Self {
+        CachedSecretValue::new(value)
+    }
+}
+
+impl From<String> for CachedSecretValue {
+    fn from(value: String) -> Self {
+        CachedSecretValue::new(SecretValue::Value(value))
+    }
+}
+
+impl From<&str> for CachedSecretValue {
+    fn from(value: &str) -> Self {
+        CachedSecretValue::new(SecretValue::Value(value.into()))
     }
 }
 
