@@ -62,7 +62,10 @@ mod test {
             https: false,
         };
 
-        assert_eq!(oauth_config.client_id, expected.client_id);
+        assert_eq!(
+            String::try_from(oauth_config.client_id)?,
+            String::try_from(expected.client_id)?
+        );
         assert_eq!(oauth_config.authorization_url, expected.authorization_url);
         assert_eq!(oauth_config.token_url, expected.token_url);
         assert_eq!(oauth_config.scopes, expected.scopes);

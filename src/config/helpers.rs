@@ -60,6 +60,18 @@ impl SecretValue {
     }
 }
 
+impl From<String> for SecretValue {
+    fn from(value: String) -> Self {
+        Self::Value(value)
+    }
+}
+
+impl From<&str> for SecretValue {
+    fn from(value: &str) -> Self {
+        Self::from(value.to_string())
+    }
+}
+
 impl TryFrom<SecretValue> for String {
     type Error = crate::Error;
 

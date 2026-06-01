@@ -10,14 +10,19 @@ use rcgen::{generate_simple_self_signed, CertifiedKey};
 use reqwest::RequestBuilder;
 use sha2::{Digest as _, Sha256};
 
-use crate::{filecache::CacheFile, oauth::BrowserAuthorizer, Authentication, Result};
+use crate::{
+    config::{CachedSecretValue, SecretValue},
+    filecache::CacheFile,
+    oauth::BrowserAuthorizer,
+    Authentication, Result,
+};
 
 use super::Authorizer;
 
 #[derive(Clone)]
 pub struct OAuth<T: Authorizer> {
-    client_id: ClientId,
-    client_secret: ClientSecret,
+    client_id: CachedSecretValue,
+    client_secret: CachedSecretValue,
     authorization_url: AuthUrl,
     token_url: TokenUrl,
     redirect_url: RedirectUrl,
@@ -68,8 +73,8 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
         );
 
         let s = Self {
-            client_id: value.client_id,
-            client_secret: value.client_secret.try_into()?,
+            client_id: value.client_id.into(),
+            client_secret: value.client_secret.into(),
             authorization_url: value.authorization_url,
             token_url: value.token_url,
             redirect_url: RedirectUrl::new(format!(
@@ -94,14 +99,14 @@ impl<T: Authorizer + Sync + Send> Authentication for OAuth<T> {
 
 impl<T: Authorizer> OAuth<T> {
     pub fn token_filename(
-        client: &ClientId,
+        client: &SecretValue,
         auth: &AuthUrl,
         token: &TokenUrl,
         scopes: &[Scope],
     ) -> PathBuf {
         let mut hasher = Sha256::new();
 
-        hasher.update(client.as_bytes());
+        hasher.update(format!("{:?}", client).as_bytes());
         hasher.update(auth.as_bytes());
         hasher.update(token.as_bytes());
 
@@ -116,8 +121,8 @@ impl<T: Authorizer> OAuth<T> {
     pub fn oauth_flow(&self) -> Result<(String, chrono::Duration)> {
         // Create an OAuth2 client by specifying the client ID, client secret, authorization URL and
         // token URL.
-        let client = BasicClient::new(self.client_id.clone())
-            .set_client_secret(self.client_secret.clone())
+        let client = BasicClient::new(ClientId::new(self.client_id.clone().to_string()?))
+            .set_client_secret(ClientSecret::new(self.client_secret.clone().to_string()?))
             .set_auth_uri(self.authorization_url.clone())
             .set_token_uri(self.token_url.clone())
             .set_redirect_uri(self.redirect_url.clone());
@@ -179,7 +184,7 @@ mod tests {
     use serde_json::json;
     use tokio::runtime::Runtime;
 
-    use crate::{filecache::CacheFile, Authentication as _};
+    use crate::{config::CachedSecretValue, filecache::CacheFile, Authentication as _};
 
     use super::OAuth;
 
@@ -243,8 +248,8 @@ mod tests {
         let api_url = server.url("/api/userinfo");
 
         let auth = OAuth {
-            client_id: ClientId::new("client_id".into()),
-            client_secret: ClientSecret::new("2io3fnaldvmaw09evmaisdhfas".into()),
+            client_id: CachedSecretValue::from("client_id"),
+            client_secret: CachedSecretValue::from("2io3fnaldvmaw09evmaisdhfas"),
             authorization_url: AuthUrl::new(auth_url.into())?,
             token_url: TokenUrl::new(token_url.into())?,
             token: CacheFile::new("./test"),

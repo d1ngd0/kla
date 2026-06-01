@@ -78,4 +78,47 @@ _environment configuration example_
   token = { path = ".oauth_token.jwt", trim = true }
 ```
 
-## 
+## OAuth
+
+_type: `oauth`_
+
+Creates a [Oauth 2.0](https://oauth.net/2/) flow, redirecting the user to a browser to authenticate. The user **will not** be prompted to follow the flow on every request, only when their cached token has expired.
+
+The `redirect_url` must be to `{http|https}://127.0.0.1:{redirect_port}` with no `/` postfix. When using https kla will generate self signed certificates for you.
+
+```toml
+[environment.settings.auth]
+  type = "oauth"
+
+  # client_id specifies the oauth client id. This field is a SecretValue
+  # when configured with `prompt` the user will be prompted after once
+  # their token has expired
+  # required
+  client_id = "kla_id"
+
+  # client_secret specifies the oauth client secret. This field is a
+  # SecretValue when configured with `prompt` the user will be prompted
+  # after once their token has expired
+  # required
+  client_secret = "super_secret_value"
+
+  # authorization_url is the location we open a browser to for login
+  # required
+  authorization_url = "https://oauth.example.com/oauth/v2/authorize"
+
+  # redirect_port specifies the port open from within kla to capture
+  # the redirection after authorization.
+  # required
+  redirect_port = 8080
+
+  # https creates a redirect url with https instead of the default
+  # http
+  # optional
+  https = false
+
+  # token_url is where kla will fetch the token after authorization
+  token_url = "https://oauth.example.com/oauth/v2/token"
+
+  # scopes a
+  scopes = ["read", "write"]
+```
