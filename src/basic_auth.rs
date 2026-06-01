@@ -2,7 +2,7 @@ use anyhow::Context;
 
 use crate::{
     config::{self, CachedSecretValue},
-    Authentication, Error, Result,
+    Authentication, Result,
 };
 
 #[derive(Clone, Debug)]

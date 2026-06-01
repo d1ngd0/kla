@@ -177,9 +177,7 @@ mod tests {
 
     use http::Method;
     use httpmock::MockServer;
-    use oauth2::{
-        AuthUrl, AuthorizationCode, ClientId, ClientSecret, RedirectUrl, Scope, TokenUrl,
-    };
+    use oauth2::{AuthUrl, AuthorizationCode, RedirectUrl, Scope, TokenUrl};
     use reqwest::ClientBuilder;
     use serde_json::json;
     use tokio::runtime::Runtime;

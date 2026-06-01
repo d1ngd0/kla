@@ -1,10 +1,11 @@
 use std::{
+    env,
     fs::read_to_string,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
-use crate::Result;
+use crate::{Error, Result};
 use inquire::{Password, PasswordDisplayMode};
 use serde::{Deserialize, Serialize};
 
@@ -12,9 +13,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum SecretValue {
-    File { path: PathBuf, trim: bool },
+    File {
+        path: PathBuf,
+        trim: Option<bool>,
+    },
     Value(String),
-    Prompt { prompt: String },
+    Prompt {
+        prompt: String,
+    },
+    Env {
+        env: String,
+        default: Option<String>,
+    },
 }
 
 impl AsRef<SecretValue> for SecretValue {
@@ -45,7 +55,7 @@ impl SecretValue {
         match self {
             SecretValue::File { path, trim } => {
                 let s = read_to_string(path)?;
-                if trim {
+                if trim.unwrap_or_default() {
                     Ok(s.trim_end().to_string())
                 } else {
                     Ok(s)
@@ -56,6 +66,10 @@ impl SecretValue {
                 .without_confirmation()
                 .with_display_mode(PasswordDisplayMode::Masked)
                 .prompt()?),
+            SecretValue::Env { env, default } => Ok(env::var(&env)
+                .ok()
+                .or(default)
+                .ok_or_else(|| Error::from(format!("{} is not set", &env)))?),
         }
     }
 }

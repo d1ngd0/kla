@@ -17,6 +17,7 @@ multiple ways:
 
 - A literal value
 - A Filepath, with the value stored in that file
+- An Environment Variable
 - Prompting the user for the value.
 
 Using `password` as the example, each type would be configured thus:
@@ -27,8 +28,14 @@ password = "hunter02"
 
 # File Path
 # `path` defines a path to the file with the password in it. Relative paths are resolved from the location of the file referencing it.
-# `trim` is used to trim the value within the file, removing any trailing whitespace from the files content
+# `trim` _optional_ is used to trim the value within the file, removing any trailing whitespace from the files content
 password = { path = "/etc/kla/super-secure-password", trim = true }
+
+# Environment Variable
+# `env` specifies the environment variable to collect the value from
+# `default` _optional_ specifies the default value to use if the variable is not set
+# If the value is not set, and there is no default specified, and error will be returned stating the variable is not set
+password = { env = "KLA_ENVIRONMENT_PASSWORD" }
 
 # Prompting
 # `prompt` defines the prompt you want to show the user to collect the

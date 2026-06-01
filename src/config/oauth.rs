@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use oauth2::{AuthUrl, ClientId, Scope, TokenUrl};
+use oauth2::{AuthUrl, Scope, TokenUrl};
 use serde::{Deserialize, Serialize};
 
 use crate::config::SecretValue;
@@ -31,7 +31,7 @@ impl OAuth {
 
 #[cfg(test)]
 mod test {
-    use oauth2::{AuthUrl, ClientId, Scope, TokenUrl};
+    use oauth2::{AuthUrl, Scope, TokenUrl};
 
     use crate::config::SecretValue;
 
