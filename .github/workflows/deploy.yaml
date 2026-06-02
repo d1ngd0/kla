@@ -56,3 +56,17 @@ jobs:
           # newline-separated globs — upload any kla binary found in downloaded artifact dirs
           files: |
             **/kla-*
+  homebrew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bump Formula
+        uses: dawidd6/action-homebrew-bump-formula@v3
+        with:
+          # A Personal Access Token (PAT) is required to push to Homebrew taps
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          
+          # Name of your formula (e.g., your-cli-tool)
+          formula: kla
+          
+          # Your custom Homebrew Tap repository (e.g., username/homebrew-tap)
+          tap: d1ngd0/homebrew-tap

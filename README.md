@@ -38,6 +38,13 @@ kla --env poetry run authors
 
 There are a few different ways to install kla onto your machine
 
+## Brew
+
+```
+brew tap d1ngd0/tap
+brew install kla
+```
+
 ## Latest Releases
 
 Check out our [latest release](https://github.com/d1ngd0/kla/releases/latest) for a pre-built binary. Linux and mac supported.
