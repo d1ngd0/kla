@@ -1,4 +1,11 @@
-use std::{fs, process::exit, sync::Arc};
+use std::{
+    env,
+    fs::{self, OpenOptions},
+    io::Write,
+    path::PathBuf,
+    process::exit,
+    sync::Arc,
+};
 
 use anyhow::{anyhow, Context as _};
 use clap::{arg, command, ArgAction, ArgMatches, Command};
@@ -19,6 +26,7 @@ static ENV: OnceCell<String> = OnceCell::const_new();
 static ROOT_ABOUT: &'static str = include_str!("txt/root_about.txt");
 static RUN_ABOUT: &'static str = include_str!("txt/run_about.txt");
 static COLLECTION_ABOUT: &'static str = include_str!("txt/run_about.txt");
+static DEFAULT_CONFIG: &'static str = include_str!("../../kla.toml");
 
 fn command() -> Command {
     Attributes::clap_flags(command!())
@@ -59,6 +67,11 @@ fn command() -> Command {
             Command::new("oauth2")
             .alias("oauth")
             .about("Sign into an environment")
+        )
+        .subcommand(
+            Command::new("init")
+            .arg(arg!(--force "ignore if the file exists, truncate it and write the default config again").action(ArgAction::SetTrue))
+            .about("Create the initial config file")
         )
 }
 
@@ -169,6 +182,7 @@ async fn run() -> Result<(), anyhow::Error> {
         }
         Some(("environment", envs)) => run_environment(envs, &config),
         Some(("oauth2", envs)) => run_oauth2(envs, &config, Attributes::from(&m)),
+        Some(("init", envs)) => run_init(envs),
         _ => run_root(&m, &config, Attributes::from(&m)).await,
     };
 
@@ -176,6 +190,43 @@ async fn run() -> Result<(), anyhow::Error> {
         log::error!("{:#}", err);
         exit(1);
     }
+    Ok(())
+}
+
+fn run_init(envs: &ArgMatches) -> Result<(), anyhow::Error> {
+    let dir = match env::home_dir() {
+        Some(home) => home.join(".config/kla/"),
+        None => PathBuf::from("/etc/kla/"),
+    };
+    let config_file = dir.join("config.toml");
+
+    // Check if the file already exists and only overwrite it if
+    if !config_file.exists()
+        || envs
+            .get_one::<bool>("force")
+            .map(|f| *f)
+            .unwrap_or_default()
+    {
+        // Create the configuration directory
+        fs::create_dir_all(&dir)?;
+        // Write the contents of the config file
+        OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(&config_file)?
+            .write(DEFAULT_CONFIG.as_bytes())?;
+        // Create the conf.d directory we reference
+        fs::create_dir_all(dir.join("conf.d"))?;
+
+        println!("Created config file at {}", config_file.to_string_lossy());
+    } else {
+        println!(
+            "Config {} already exists. Overwrite with --force",
+            config_file.to_string_lossy()
+        );
+    }
+
     Ok(())
 }
 

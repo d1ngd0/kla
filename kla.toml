@@ -4,7 +4,7 @@ default_environment = ".env"
 
 # Collection is a set of run template, where you specify the environment and the
 # template you want to run.
-collection = "collection/"
+#collection = "collection/"
 
 # You can specify multiple configuration directories to use at runtime as well. The
 # [[config]] table has two values:
