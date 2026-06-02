@@ -58,6 +58,7 @@ jobs:
             **/kla-*
   homebrew:
     runs-on: ubuntu-latest
+    needs: publish_release
     steps:
       - name: Bump Formula
         uses: dawidd6/action-homebrew-bump-formula@v3
