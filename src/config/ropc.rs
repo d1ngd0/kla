@@ -2,15 +2,12 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    config::SecretValue,
-    ropc::{ClientId, TokenUrl},
-};
+use crate::config::SecretValue;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ROPC {
-    pub client_id: ClientId,
-    pub token_url: TokenUrl,
+    pub client_id: SecretValue,
+    pub token_url: String,
     pub client_secret: SecretValue,
     pub username: SecretValue,
     pub password: SecretValue,

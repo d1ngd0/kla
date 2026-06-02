@@ -129,3 +129,85 @@ The `redirect_url` must be to `{http|https}://127.0.0.1:{redirect_port}` with no
   # scopes a
   scopes = ["read", "write"]
 ```
+
+## ROPC
+
+ROPC is an older version of OAuth for system to system authentication. It is best practice to move away from this authentication mechanism. **But there is a lot of this out in the wild** and it is better than nothing, so we got you.
+
+
+```toml
+[environment.settings.auth]
+  type = "ropc"
+
+  # client_id specifies the oauth client id. This field is a SecretValue
+  # when configured with `prompt` the user will be prompted after once
+  # their token has expired
+  # required
+  client_id = "kla_id"
+
+  # client_secret specifies the oauth client secret. This field is a
+  # SecretValue when configured with `prompt` the user will be prompted
+  # after once their token has expired
+  # required
+  client_secret = "super_secret_value"
+
+  # token_url is where kla will fetch the token after authorization
+  token_url = "https://oauth.example.com/oauth/v2/token"
+
+  # username is the username for the ropc user. This field is a
+  # SecretValue when configured with `prompt` the user will be prompted
+  # after once their token has expired
+  # required
+  username = "kla_ropc"
+
+  # password is the password for the ropc user. This field is a
+  # SecretValue when configured with `prompt` the user will be prompted
+  # after once their token has expired
+  # required
+  password = "hunter02"
+```
+
+## SigV4
+
+
+In order to use AWS Sigv4 with your requests you need to appropriately configure your machine. whether you have multiple AWS keys or not kla has your back.
+
+KLA assumes you have set up your [Configuration and Credentials](https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-files.html) files, but if not here is what you need.
+
+In your `~/.aws/credentials` file you will want to add any keys you currently have
+
+```toml
+[default]
+aws_access_key_id=ASIAIOSFODNN7EXAMPLE
+aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_session_token = IQoJb3JpZ2luX2IQoJb3JpZ2luX2IQoJb3JpZ2luX2IQoJb3JpZ2luX2IQoJb3JpZVERYLONGSTRINGEXAMPLE
+
+[user1]
+aws_access_key_id=ASIAI44QH8DHBEXAMPLE
+aws_secret_access_key=je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY
+aws_session_token = fcZib3JpZ2luX2IQoJb3JpZ2luX2IQoJb3JpZ2luX2IQoJb3JpZ2luX2IQoJb3JpZVERYLONGSTRINGEXAMPLE
+```
+
+Within your `~/.aws/config` file you will want the appropriate settings for region.
+
+```toml
+[default]
+region=us-west-2
+output=json
+
+[profile user1]
+region=us-east-1
+output=text
+```
+
+Finally your environment is configured as such
+
+```toml
+[environment.settings.auth]
+  type = "sigv4"
+
+  # sigv4_aws_profile specifies the profile to use and sigv4_aws_service defines the
+  # service to use.
+  # These settings assume you have set up your AWS credentials correctly.
+  sigv4_aws_profile = "user1"
+```

@@ -1,8 +1,6 @@
-use anyhow::Context;
-
 use crate::{
     config::{self, CachedSecretValue},
-    Authentication, Result,
+    Authentication,
 };
 
 #[derive(Clone, Debug)]
@@ -12,18 +10,6 @@ pub struct BasicAuth {
 }
 
 impl BasicAuth {
-    pub fn from_userpass_string(userpass: &str) -> Result<BasicAuth> {
-        let mut chunks = userpass.splitn(2, ":");
-
-        Ok(BasicAuth {
-            username: chunks
-                .next()
-                .context("username not provided in string")?
-                .into(),
-            password: chunks.next().map(CachedSecretValue::from),
-        })
-    }
-
     pub fn new<U, P>(username: U, password: Option<P>) -> BasicAuth
     where
         U: Into<CachedSecretValue>,
