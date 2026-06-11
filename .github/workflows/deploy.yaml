@@ -11,10 +11,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - run: cargo test
   build_bin:
     strategy:
       matrix:
@@ -63,6 +59,7 @@ jobs:
   homebrew:
     runs-on: ubuntu-latest
     needs: publish_release
+    if: github.ref_type == 'tag' # only run when this workflow was triggered by a tag push
     steps:
       - name: Bump Formula
         uses: dawidd6/action-homebrew-bump-formula@v3
