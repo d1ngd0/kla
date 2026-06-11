@@ -11,6 +11,10 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cargo test
   build_bin:
     strategy:
       matrix:
@@ -21,15 +25,15 @@ jobs:
             arch: aarch64-apple
           - image: macos-15-intel
             arch: x86_64-apple
-
+    if: github.ref_type == 'tag' # only run when this workflow was triggered by a tag push
     runs-on: "${{ matrix.builds.image }}"
     steps:
       - uses: actions/checkout@v4
       - run: rustup update
       - run: cargo install set-cargo-version
-      - run: set-cargo-version ./Cargo.toml ${{ github.ref_name }} # Example using branch name as version
+      - run: set-cargo-version ./Cargo.toml ${{ github.event.release.tag_name }}
       - run: cargo build --release
-      - run: mv "target/release/kla" "target/release/kla-${{ matrix.builds.arch }}-${{ github.ref_name }}"
+      - run: mv "target/release/kla" "target/release/kla-${{ matrix.builds.arch }}-${{ github.event.release.tag_name }}"
       - uses: actions/upload-artifact@v4
         with:
           name: "kla-${{ matrix.builds.arch }}-${{ github.ref_name }}"
