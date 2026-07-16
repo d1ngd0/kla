@@ -63,7 +63,6 @@ jobs:
     env:
       HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
     steps:
-      - run: brew trust --formula d1ngd0/homebrew-tap
       - name: Bump Formula
         uses: dawidd6/action-homebrew-bump-formula@v3
         with:
