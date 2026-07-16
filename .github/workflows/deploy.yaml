@@ -60,6 +60,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: publish_release
     if: github.ref_type == 'tag' # only run when this workflow was triggered by a tag push
+    env:
+      HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
     steps:
       - run: brew trust --formula d1ngd0/homebrew-tap
       - name: Bump Formula
