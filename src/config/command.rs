@@ -10,7 +10,7 @@ use inquire::Password;
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
-use crate::{config::Attributes, Ok, Opt, RenderGroup};
+use crate::{clap::arg_file_value, config::Attributes, Error, Ok, Opt, RenderGroup};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
@@ -316,6 +316,8 @@ pub struct ConfigArg {
     action: Option<ArgAction>,
     #[serde(rename = "password", default)]
     password: bool,
+    #[serde(rename = "file_value", default)]
+    file_value: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -364,11 +366,28 @@ impl ConfigArgCollection {
         let mut ctx = Context::new();
         for arg in self.iter() {
             match arg.arg_type {
+                // Many Valued String
                 ConfigArgType::String if arg.many_valued => {
                     get_many!(args, String, &arg.name)
                         .iter()
                         .for_each(|v| ctx.insert(&arg.name, &v));
                 }
+
+                // Password and File Value String
+                ConfigArgType::String if arg.password && arg.file_value => {
+                    arg_file_value(get_one!(args, String, &arg.name), &arg.name)?
+                        .map(|v| v.clone())
+                        .or_else(|| {
+                            Password::new("Password:")
+                                .without_confirmation()
+                                .prompt()
+                                .ok()
+                        })
+                        .iter()
+                        .for_each(|v| ctx.insert(&arg.name, v))
+                }
+
+                // Password String
                 ConfigArgType::String if arg.password => get_one!(args, String, &arg.name)
                     .map(|v| v.clone())
                     .or_else(|| {
@@ -379,22 +398,39 @@ impl ConfigArgCollection {
                     })
                     .iter()
                     .for_each(|v| ctx.insert(&arg.name, v)),
+
+                // File Value String
+                ConfigArgType::String if arg.file_value => {
+                    arg_file_value(get_one!(args, String, &arg.name), &arg.name)?
+                        .iter()
+                        .for_each(|v| ctx.insert(&arg.name, v))
+                }
+
+                // Just a String
                 ConfigArgType::String => get_one!(args, String, &arg.name)
                     .iter()
                     .for_each(|v| ctx.insert(&arg.name, v)),
+
+                // Many Valued Number
                 ConfigArgType::Number if arg.many_valued => {
                     get_many!(args, Number, &arg.name)
                         .iter()
                         .for_each(|v| ctx.insert(&arg.name, &v));
                 }
+
+                // Just A number
                 ConfigArgType::Number => get_one!(args, Number, &arg.name)
                     .iter()
                     .for_each(|v| ctx.insert(&arg.name, v)),
+
+                // Many Valued Boolean
                 ConfigArgType::Bool if arg.many_valued => {
                     get_many!(args, bool, &arg.name)
                         .iter()
                         .for_each(|v| ctx.insert(&arg.name, &v));
                 }
+
+                // Just a Boolean
                 ConfigArgType::Bool => get_one!(args, bool, &arg.name)
                     .iter()
                     .for_each(|v| ctx.insert(&arg.name, v)),
@@ -469,6 +505,20 @@ impl TryFrom<ConfigArg> for Arg {
     type Error = crate::Error;
 
     fn try_from(value: ConfigArg) -> Result<Self, Self::Error> {
+        match value.arg_type {
+            ConfigArgType::Number if value.file_value => {
+                return Err(Error::from(
+                    "Can not specify `file_value` when type is `number`",
+                ))
+            }
+            ConfigArgType::Bool if value.file_value => {
+                return Err(Error::from(
+                    "Can not specify `file_value` when type is bool",
+                ))
+            }
+            _ => (),
+        }
+
         let arg = Arg::new(&value.name)
             .with_some(value.help, Arg::help)
             .with_some(value.long_help, Arg::long_help)

@@ -54,9 +54,9 @@ pub fn arg_file_value(val: Option<&String>, name: &str) -> Result<Option<String>
                     .with_context(|| format!("could not read {} from standard in", name))?,
             )
         }
-        Some('!') => {
+        Some('@') => {
             let filename = val
-                .strip_prefix("!")
+                .strip_prefix("@")
                 .expect("the prefix and the matching arm must match for this to work")
                 .shell_expansion();
             debug!("reading {} from contents of file {}", name, filename);
@@ -64,9 +64,9 @@ pub fn arg_file_value(val: Option<&String>, name: &str) -> Result<Option<String>
                 format!("could not read {} from file {}", name, filename.as_str())
             })?)
         }
-        Some('@') => {
+        Some('?') => {
             let filename = val
-                .strip_prefix("@")
+                .strip_prefix("?")
                 .expect("the prefix and the matching arm must match for this to work")
                 .shell_expansion();
             debug!(

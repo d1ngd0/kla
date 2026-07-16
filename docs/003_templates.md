@@ -296,8 +296,19 @@ text
   action = 'set'
 
   # password will show a password prompt if the value is empty, so you
-  # don't have to pass that in
+  # don't have to pass that in. This _can_ be used with `file_value` but
+  # keep in mind, if your file starts with a special character there is
+  # no way to escape the value.
   password = false
+
+  # Specifies if the argument should allow the special file value prefixes
+  # The argument checks for a prefix which defines how we treat the incoming value
+  # `-` => Read from standard input
+  # `?` => Read from file (followed by a path `?/tmp/myfile.txt`), if the file doesn't
+  #        exist we return None
+  # `@` => Read from file (followed by a path `@/tmp/myfile.txt`), if the files doesn't
+  #        exists return an error
+  file_value = true
 
 # Body is a template that uses values constructed from [[arg]] to create the
 # http body. We use Tera (https://keats.github.io/tera/docs/) as the templating
