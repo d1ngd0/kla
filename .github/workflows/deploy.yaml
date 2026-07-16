@@ -61,6 +61,7 @@ jobs:
     needs: publish_release
     if: github.ref_type == 'tag' # only run when this workflow was triggered by a tag push
     steps:
+      - run: brew trust --formula d1ngd0/homebrew-tap
       - name: Bump Formula
         uses: dawidd6/action-homebrew-bump-formula@v3
         with:
