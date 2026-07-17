@@ -66,11 +66,7 @@ jobs:
       - name: Bump Formula
         uses: dawidd6/action-homebrew-bump-formula@v3
         with:
-          # A Personal Access Token (PAT) is required to push to Homebrew taps
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          
-          # Name of your formula (e.g., your-cli-tool)
+          token: "${{ secrets.HOMEBREW_TAP_TOKEN }}"
           formula: kla
-          
-          # Your custom Homebrew Tap repository (e.g., username/homebrew-tap)
           tap: d1ngd0/homebrew-tap
+          tag: "${{ github.ref_name }}"
