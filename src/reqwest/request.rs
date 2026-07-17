@@ -3,10 +3,10 @@ use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Request, RequestBuilder,
 };
-use std::fmt::Display;
 use std::{collections::HashMap, time::Duration};
+use std::{fmt::Display, str::from_utf8};
 
-use crate::{impl_opt, impl_when, Error, RenderGroup, Result};
+use crate::{clap::edit_value, impl_opt, impl_when, Error, RenderGroup, Result};
 
 #[derive(Debug, Clone)]
 /// KeyValue enables you to turn a string like `key=value` into an actual key value
@@ -211,5 +211,30 @@ impl KlaRequestBuilder for RequestBuilder {
     }
 }
 
+pub trait KlaRequest: Sized {
+    #[allow(async_fn_in_trait)]
+    async fn edit(self, edit: Option<&bool>) -> Result<Self>;
+}
+
+impl KlaRequest for Request {
+    async fn edit(mut self, edit: Option<&bool>) -> Result<Self> {
+        // if we aren't editing return right away
+        if !edit.copied().unwrap_or_default() {
+            return Ok(self);
+        }
+
+        let body = self.body_mut().take();
+        let body = body
+            .as_ref()
+            .map(|b| b.as_bytes())
+            .flatten()
+            .unwrap_or_default();
+
+        self.body_mut().replace(edit_value(from_utf8(body)?).await?);
+        Ok(self)
+    }
+}
+
 impl_opt!(RequestBuilder, crate::Error);
 impl_when!(Request);
+impl_when!(Result<Request>);

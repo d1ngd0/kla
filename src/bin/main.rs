@@ -12,8 +12,8 @@ use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
     clap::{arg_file_value, arg_file_writer},
     config::{Attributes, CollectionConfig, Config, ConfigCommand},
-    AsyncOption, CollectionBuilder, Environment, KlaRequestBuilder, Opt, Optional, OutputBuilder,
-    Sigv4Request, TemplateBuilder,
+    AsyncOption, AsyncResult as _, CollectionBuilder, Environment, Error, KlaRequest,
+    KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request, TemplateBuilder,
 };
 use log::{debug, info, trace, LevelFilter};
 use regex::Regex;
@@ -44,6 +44,7 @@ fn command() -> Command {
         .arg(arg!(-F --form <FORM> "Specify a form key=value to be passed in the form body").action(ArgAction::Append))
         .arg(arg!(-v --verbose "-v Warning, -vv Info, -vvv Debug, -vvvv Trace; not specified logs Error").action(ArgAction::Count))
         .arg(arg!(--dry "don't actually do anything, will automatically enable verbose").action(ArgAction::SetTrue))
+        .arg(arg!(--edit "edit the body of the request before sending it off").action(ArgAction::SetTrue))
         .arg(arg!("method-or-url": [METHOD_OR_URL] "The URL path (with an assumed GET method) OR the method if another argument is supplied"))
         .arg(arg!(url: [URL] "The URL path when a method is supplied"))
         .arg(arg!(body: [BODY] "The body of the HTTP request, if prefixed with a `@` it is treated as a file path"))
@@ -354,11 +355,7 @@ async fn run_run<S: Into<String>>(
     let output = TemplateBuilder::new()
         .config(subcommand_config.clone())
         .build()?
-        .run(
-            &env,
-            subcommand,
-            args.get_one("dry").map(|b| *b).unwrap_or_default(),
-        )
+        .run(&env, subcommand, args)
         .await?;
 
     let mut writer = arg_file_writer(output.desired_location(), "output")
@@ -621,8 +618,11 @@ async fn run_root(
             )
         })?
         .build()
-        .context("Could not build http request")
-        .and_then(|req| Ok(env.sign(req)?))?;
+        .map_err(Error::from)
+        .and_then(|req| env.sign(req))
+        .async_and_then(async |req| req.edit(args.get_one::<bool>("edit")).await)
+        .await
+        .context("Could not build http request")?;
 
     let request = if args.get_one("sigv4").map(|v| *v).unwrap_or(false) {
         request

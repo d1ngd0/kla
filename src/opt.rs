@@ -184,3 +184,30 @@ impl<T> AsyncOption for Option<T> {
         }
     }
 }
+
+pub trait AsyncResult {
+    type Input;
+    type Error;
+
+    #[allow(async_fn_in_trait)]
+    async fn async_and_then<U, F, Fut>(self, f: F) -> Result<U, Self::Error>
+    where
+        F: FnOnce(Self::Input) -> Fut,
+        Fut: Future<Output = Result<U, Self::Error>>;
+}
+
+impl<T, E> AsyncResult for Result<T, E> {
+    type Input = T;
+    type Error = E;
+
+    async fn async_and_then<U, F, Fut>(self, f: F) -> Result<U, Self::Error>
+    where
+        F: FnOnce(T) -> Fut,
+        Fut: Future<Output = Result<U, Self::Error>>,
+    {
+        match self {
+            Result::Ok(v) => f(v).await,
+            Err(err) => Err(err),
+        }
+    }
+}

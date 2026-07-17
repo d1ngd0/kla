@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::iter;
 
 use anyhow::Context as _;
-use clap::{ArgMatches, Command};
+use clap::{arg, ArgAction, ArgMatches, Command};
 use log::{debug, info};
 use reqwest::{RequestBuilder, Response};
 use tera::{Context, Tera};
@@ -10,8 +10,8 @@ use tera::{Context, Tera};
 use crate::clap::arg_file_value;
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
-    Attributes, Environment, Error, FetchMany as _, KlaRequestBuilder, Opt, Output, OutputBuilder,
-    Result, Sigv4Request, WithAttributes as _,
+    AsyncResult as _, Attributes, Environment, Error, FetchMany as _, KlaRequest as _,
+    KlaRequestBuilder, Opt, Output, OutputBuilder, Result, Sigv4Request, WithAttributes as _,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -117,15 +117,25 @@ impl Template {
         T: Into<OsString> + Clone,
         E: Environment,
     {
-        let cmd = Command::try_from(self)?;
+        // this code is really stupid, and I hate it, we are hacking the shit out of things here
+        // but I really don't care since this drives collections and collections are shit.
+        // I will put some thought into this at some point but it **is not this day**
+        let cmd = Command::try_from(self)?.arg(
+            arg!(--dry "This is really gross, but this serves collections which are stupid")
+                .action(ArgAction::SetTrue),
+        );
         let args =
             iter::once(OsString::from(&self.config.name)).chain(args.into_iter().map(|s| s.into()));
-        let args = cmd.get_matches_from(args);
+        let args = if dry {
+            cmd.get_matches_from(args.chain(iter::once(OsString::from("--dry"))))
+        } else {
+            cmd.get_matches_from(args)
+        };
 
-        self.run(env, &args, dry).await
+        self.run(env, &args, &args).await
     }
 
-    pub async fn run<E>(&self, env: &E, args: &ArgMatches, dry: bool) -> Result<Output>
+    pub async fn run<E>(&self, env: &E, args: &ArgMatches, parent: &ArgMatches) -> Result<Output>
     where
         E: Environment,
     {
@@ -248,8 +258,11 @@ impl Template {
                 )
             })?
             .build()
-            .context("could not build http request")
-            .and_then(|req| Ok(env.sign(req)?))?;
+            .map_err(Error::from)
+            .and_then(|req| env.sign(req))
+            .async_and_then(async |req| req.edit(parent.get_one::<bool>("edit")).await)
+            .await
+            .context("could not build http request")?;
 
         let request = if args.get_one("sigv4").map(|v| *v).unwrap_or(false) {
             request
@@ -263,7 +276,7 @@ impl Template {
         };
         info!("Request: {:#?}", request);
 
-        let response = match dry {
+        let response = match parent.get_one("dry").copied().unwrap_or_default() {
             true => Response::from(http::Response::<Vec<u8>>::default()),
             false => env
                 .execute(request)

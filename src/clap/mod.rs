@@ -1,4 +1,9 @@
-use std::{fs, io, pin::Pin};
+use std::{
+    env::{self, temp_dir},
+    fmt::Display,
+    fs, io,
+    pin::Pin,
+};
 
 use anyhow::Context;
 use clap::{
@@ -6,9 +11,13 @@ use clap::{
     Arg,
 };
 use log::debug;
-use tokio::{fs::File, io::AsyncWrite};
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt as _, AsyncWrite, AsyncWriteExt},
+    process::Command,
+};
 
-use crate::{impl_ok, impl_opt, Expand as _};
+use crate::{impl_ok, impl_opt, Error, Expand as _};
 
 pub trait DefaultValueIfSome {
     fn default_value_if_some(self, val: Option<impl IntoResettable<OsStr>>) -> Self;
@@ -111,6 +120,48 @@ pub async fn arg_file_writer(
     };
 
     Some(writer)
+}
+
+pub async fn edit_value<I, O>(v: I) -> Result<O, Error>
+where
+    I: Display,
+    O: From<String>,
+{
+    // 1. Create a temporary file
+    let mut file_path = temp_dir();
+    file_path.push("rust_edit_temp.txt");
+
+    let mut file = File::create(&file_path).await?;
+    let v = v.to_string();
+    file.write_all(v.as_bytes()).await?;
+
+    // 2. Determine which editor to use
+    let editor = env::var("EDITOR")
+        .or_else(|_| env::var("VISUAL"))
+        .unwrap_or_else(|_| {
+            if cfg!(target_os = "windows") {
+                "notepad.exe".to_string()
+            } else {
+                "vi".to_string()
+            }
+        });
+
+    // 3. Spawn the editor and wait for it to close
+    let status = Command::new(editor).arg(&file_path).status().await?;
+
+    let content = if status.success() {
+        // 4. Read the updated file content
+        let mut content = String::new();
+        File::open(&file_path)
+            .await?
+            .read_to_string(&mut content)
+            .await?;
+        content
+    } else {
+        return Err(Error::from("Editor closed with an error."));
+    };
+
+    Ok(O::from(content))
 }
 
 impl_opt!(clap::Command, crate::Error);
