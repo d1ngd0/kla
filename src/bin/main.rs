@@ -10,14 +10,14 @@ use std::{
 use anyhow::{anyhow, Context as _};
 use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
-    clap::{arg_file_value, arg_file_writer},
+    clap::{arg_file_writer, ArgOptions},
     config::{Attributes, CollectionConfig, Config, ConfigCommand},
-    AsyncOption, AsyncResult as _, CollectionBuilder, Environment, Error, KlaRequest,
-    KlaRequestBuilder, Opt, Optional, OutputBuilder, Sigv4Request, TemplateBuilder,
+    AsyncOption, AsyncResult as _, CollectionBuilder, Environment, Error, KlaRequest, Opt,
+    Optional, OutputBuilder, Sigv4Request, TemplateBuilder,
 };
 use log::{debug, info, trace, LevelFilter};
 use regex::Regex;
-use reqwest::{RequestBuilder, Response};
+use reqwest::Response;
 use skim::{prelude::SkimOptionsBuilder, Skim, SkimItem};
 use tokio::sync::OnceCell;
 
@@ -567,56 +567,7 @@ async fn run_root(
 
     let request = env
         .request(method.as_str(), uri)?
-        .with_some(
-            arg_file_value(args.get_one("body"), "body")?,
-            RequestBuilder::body,
-        )
-        .opt_headers(args.get_many("header"))
-        .with_context(|| {
-            format!(
-                "could not set header: {:?}",
-                args.get_many::<String>("header")
-            )
-        })?
-        .with_some(
-            arg_file_value(args.get_one("bearer-token"), "bearer-token")?,
-            RequestBuilder::bearer_auth,
-        )
-        .with_some(
-            arg_file_value(args.get_one("basic-auth"), "basic-auth")?,
-            |b, basic_auth| {
-                let mut parts = basic_auth.splitn(2, ":");
-                b.basic_auth(parts.next().unwrap(), parts.next())
-            },
-        )
-        .opt_query(args.get_many("query"))
-        .with_context(|| {
-            format!(
-                "could not set query param: {:?}",
-                args.get_many::<String>("query")
-            )
-        })?
-        .opt_form(args.get_many("form"))
-        .with_context(|| {
-            format!(
-                "could not set form param: {:?}",
-                args.get_many::<String>("form")
-            )
-        })?
-        .opt_timeout(args.get_one("timeout"))
-        .with_context(|| {
-            format!(
-                "{:?} is not a valid format",
-                args.get_one::<String>("timeout")
-            )
-        })?
-        .opt_version(args.get_one("http-version"))
-        .with_context(|| {
-            format!(
-                "{:?} is not a valid http-version",
-                args.get_one::<String>("http-version")
-            )
-        })?
+        .with_arg_opts(args)?
         .build()
         .map_err(Error::from)
         .and_then(|req| env.sign(req))

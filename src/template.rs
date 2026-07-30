@@ -7,7 +7,7 @@ use log::{debug, info};
 use reqwest::{RequestBuilder, Response};
 use tera::{Context, Tera};
 
-use crate::clap::arg_file_value;
+use crate::clap::{arg_file_value, ArgOptions};
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
     AsyncResult as _, Attributes, Environment, Error, FetchMany as _, KlaRequest as _,
@@ -180,13 +180,6 @@ impl Template {
                     .with_context(|| format!("could not render body template"))?,
                 RequestBuilder::body,
             )
-            .opt_headers(args.get_many("header"))
-            .with_context(|| {
-                format!(
-                    "could not set header: {:?}",
-                    args.get_many::<String>("header")
-                )
-            })?
             .opt_headers(Some(
                 self.tmpl
                     .fetch_with_prefix("header.", &context)
@@ -199,24 +192,6 @@ impl Template {
                     .into_iter(),
             ))
             .with_context(|| format!("headers could not be loaded"))?
-            .with_some(
-                arg_file_value(args.get_one("bearer-token"), "bearer-token")?,
-                RequestBuilder::bearer_auth,
-            )
-            .with_some(
-                arg_file_value(args.get_one("basic-auth"), "basic-auth")?,
-                |b, basic_auth| {
-                    let mut parts = basic_auth.splitn(2, ":");
-                    b.basic_auth(parts.next().unwrap(), parts.next())
-                },
-            )
-            .opt_query(args.get_many("query"))
-            .with_context(|| {
-                format!(
-                    "could not set query param: {:?}",
-                    args.get_many::<String>("query")
-                )
-            })?
             .opt_query(Some(
                 self.tmpl
                     .fetch_with_prefix("query.", &context)
@@ -229,8 +204,6 @@ impl Template {
                     .into_iter(),
             ))
             .with_context(|| format!("query params could not be loaded",))?
-            .opt_form(args.get_many("form"))
-            .with_context(|| format!("could not set form: {:?}", args.get_many::<String>("form")))?
             .opt_form(Some(
                 self.tmpl
                     .fetch_with_prefix("form.", &context)
@@ -243,20 +216,7 @@ impl Template {
                     .into_iter(),
             ))
             .with_context(|| format!("form params could not be loaded",))?
-            .opt_timeout(args.get_one("timeout"))
-            .with_context(|| {
-                format!(
-                    "{:?} is not a valid format",
-                    args.get_one::<String>("timeout")
-                )
-            })?
-            .opt_version(args.get_one("http-version"))
-            .with_context(|| {
-                format!(
-                    "{:?} is not a valid http-version",
-                    args.get_one::<String>("http-version")
-                )
-            })?
+            .with_arg_opts(parent)?
             .build()
             .map_err(Error::from)
             .and_then(|req| env.sign(req))

@@ -8,16 +8,17 @@ use std::{
 use anyhow::Context;
 use clap::{
     builder::{IntoResettable, OsStr},
-    Arg,
+    Arg, ArgMatches,
 };
 use log::debug;
+use reqwest::RequestBuilder;
 use tokio::{
     fs::File,
     io::{AsyncReadExt as _, AsyncWrite, AsyncWriteExt},
     process::Command,
 };
 
-use crate::{impl_ok, impl_opt, Error, Expand as _};
+use crate::{impl_ok, impl_opt, Error, Expand as _, KlaRequestBuilder as _, Opt as _};
 
 pub trait DefaultValueIfSome {
     fn default_value_if_some(self, val: Option<impl IntoResettable<OsStr>>) -> Self;
@@ -168,3 +169,63 @@ impl_opt!(clap::Command, crate::Error);
 impl_opt!(clap::Arg, crate::Error);
 impl_ok!(clap::Command, crate::Error);
 impl_ok!(clap::Arg, crate::Error);
+
+pub trait ArgOptions: Sized {
+    fn with_arg_opts(self, args: &ArgMatches) -> Result<Self, Error>;
+}
+
+impl ArgOptions for reqwest::RequestBuilder {
+    fn with_arg_opts(self, args: &ArgMatches) -> Result<Self, Error> {
+        Ok(self
+            .with_some(
+                arg_file_value(args.get_one("body"), "body")?,
+                RequestBuilder::body,
+            )
+            .opt_headers(args.get_many("header"))
+            .with_context(|| {
+                format!(
+                    "could not set header: {:?}",
+                    args.get_many::<String>("header")
+                )
+            })?
+            .with_some(
+                arg_file_value(args.get_one("bearer-token"), "bearer-token")?,
+                RequestBuilder::bearer_auth,
+            )
+            .with_some(
+                arg_file_value(args.get_one("basic-auth"), "basic-auth")?,
+                |b, basic_auth| {
+                    let mut parts = basic_auth.splitn(2, ":");
+                    b.basic_auth(parts.next().unwrap(), parts.next())
+                },
+            )
+            .opt_query(args.get_many("query"))
+            .with_context(|| {
+                format!(
+                    "could not set query param: {:?}",
+                    args.get_many::<String>("query")
+                )
+            })?
+            .opt_form(args.get_many("form"))
+            .with_context(|| {
+                format!(
+                    "could not set form param: {:?}",
+                    args.get_many::<String>("form")
+                )
+            })?
+            .opt_timeout(args.get_one("timeout"))
+            .with_context(|| {
+                format!(
+                    "{:?} is not a valid format",
+                    args.get_one::<String>("timeout")
+                )
+            })?
+            .opt_version(args.get_one("http-version"))
+            .with_context(|| {
+                format!(
+                    "{:?} is not a valid http-version",
+                    args.get_one::<String>("http-version")
+                )
+            })?)
+    }
+}
