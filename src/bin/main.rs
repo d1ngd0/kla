@@ -4,6 +4,7 @@ use std::{
     io::Write,
     path::PathBuf,
     process::exit,
+    str::from_utf8,
     sync::Arc,
 };
 
@@ -13,7 +14,7 @@ use kla::{
     clap::{arg_file_writer, ArgOptions},
     config::{Attributes, CollectionConfig, Config, ConfigCommand},
     AsyncOption, AsyncResult as _, CollectionBuilder, Environment, Error, KlaRequest, Opt,
-    Optional, OutputBuilder, Sigv4Request, TemplateBuilder,
+    Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
 };
 use log::{debug, info, trace, LevelFilter};
 use regex::Regex;
@@ -571,6 +572,18 @@ async fn run_root(
         .build()
         .map_err(Error::from)
         .and_then(|req| env.sign(req))
+        .when(args.get_count("verbose") > 0, |f| {
+            f.map(|r| {
+                info!(
+                    "{}",
+                    r.body()
+                        .map(|f| f.as_bytes().unwrap_or_default())
+                        .map(|f| from_utf8(f).unwrap_or_default())
+                        .unwrap_or_default()
+                );
+                r
+            })
+        })
         .async_and_then(async |req| req.edit(args.get_one::<bool>("edit")).await)
         .await
         .context("Could not build http request")?;

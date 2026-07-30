@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::iter;
+use std::str::from_utf8;
 
 use anyhow::Context as _;
 use clap::{arg, ArgAction, ArgMatches, Command};
@@ -7,11 +8,12 @@ use log::{debug, info};
 use reqwest::{RequestBuilder, Response};
 use tera::{Context, Tera};
 
-use crate::clap::{arg_file_value, ArgOptions};
+use crate::clap::ArgOptions;
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
     AsyncResult as _, Attributes, Environment, Error, FetchMany as _, KlaRequest as _,
-    KlaRequestBuilder, Opt, Output, OutputBuilder, Result, Sigv4Request, WithAttributes as _,
+    KlaRequestBuilder, Opt, Output, OutputBuilder, Result, Sigv4Request, When as _,
+    WithAttributes as _,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -220,6 +222,18 @@ impl Template {
             .build()
             .map_err(Error::from)
             .and_then(|req| env.sign(req))
+            .when(parent.get_count("verbose") > 0, |f| {
+                f.map(|r| {
+                    info!(
+                        "{}",
+                        r.body()
+                            .map(|f| f.as_bytes().unwrap_or_default())
+                            .map(|f| from_utf8(f).unwrap_or_default())
+                            .unwrap_or_default()
+                    );
+                    r
+                })
+            })
             .async_and_then(async |req| req.edit(parent.get_one::<bool>("edit")).await)
             .await
             .context("could not build http request")?;
