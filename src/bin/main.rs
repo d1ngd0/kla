@@ -573,7 +573,7 @@ async fn run_root(
         .map_err(Error::from)
         .and_then(|req| env.sign(req))
         .when(args.get_count("verbose") > 0, |f| {
-            f.map(|r| {
+            f.inspect(|r| {
                 info!(
                     "{}",
                     r.body()
@@ -581,7 +581,6 @@ async fn run_root(
                         .map(|f| from_utf8(f).unwrap_or_default())
                         .unwrap_or_default()
                 );
-                r
             })
         })
         .async_and_then(async |req| req.edit(args.get_one::<bool>("edit")).await)
