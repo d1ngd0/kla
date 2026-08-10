@@ -34,3 +34,4 @@ default_environment = ".env"
 type = "dir"
 path = "conf.d/"
 
+extension_dir = ".extensions/"

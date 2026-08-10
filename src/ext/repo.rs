@@ -1,9 +1,9 @@
-use anyhow::Context;
 use flate2::read::GzDecoder;
 use oci_client::{client::ClientConfig, secrets::RegistryAuth, Client, Reference};
+use semver::Version;
 use tar::Archive;
 
-use crate::{config::Config, ExtensionSet, KResult, EXTENSION_ROOT};
+use crate::{config::Config, Context as _, Error, ExtensionSet, KResult, EXTENSION_ROOT};
 use std::{
     fs::{self},
     hash::{DefaultHasher, Hash, Hasher as _},
@@ -47,7 +47,7 @@ impl ExtensionRepo {
     }
 
     /// extensions returns the current extensions from the extensions file
-    fn extensions(&self) -> KResult<ExtensionSet> {
+    pub fn extensions(&self) -> KResult<ExtensionSet> {
         let path = self.dir.join(EXTENSION_ROOT);
         if path.exists() {
             let extensions = fs::read_to_string(&path).with_context(|| {
@@ -90,6 +90,61 @@ impl ExtensionRepo {
                 path.as_path().to_string_lossy()
             )
         })?)
+    }
+
+    pub fn remove(&self, image: &Reference) -> KResult<()> {
+        let mut extensions = self.extensions()?;
+        let removed = if let Some(index) = extensions.iter().position(|f| f == image) {
+            extensions.remove(index)
+        } else {
+            return Err(Error::from(format!("extension {} not installed", image)));
+        };
+
+        // remove the extension
+        self.commit_extensions(extensions)?;
+        // clean up the templates
+        fs::remove_dir_all(removed.dir)?;
+
+        Ok(())
+    }
+
+    pub async fn update<W: Write, R: AsRef<Reference>>(
+        &self,
+        image: R,
+        stdout: &mut W,
+    ) -> KResult<()> {
+        let image = image.as_ref();
+
+        let current = image
+            .tag()
+            .ok_or(Error::from("no version defined"))
+            .and_then(|f| Version::parse(f).map_err(Error::from))
+            .with_context(|| format!("currently installed: {}", image))?;
+        let auth = self.oci_client_auth()?;
+        let tags = self
+            .oci_client()?
+            .list_tags(image, &auth, None, None)
+            .await?;
+
+        let max = tags
+            .tags
+            .into_iter()
+            .filter_map(|tag| Version::parse(tag.as_str()).ok())
+            .max()
+            .ok_or_else(|| Error::from("no semantic versions available"))?;
+
+        if max > current {
+            let updated = Reference::with_tag(
+                image.registry().into(),
+                image.repository().into(),
+                max.to_string(),
+            );
+
+            let _ = writeln!(stdout, "upgrading from {} -> {}", image, updated);
+            let _ = self.add(&updated, stdout).await?;
+        }
+
+        Ok(())
     }
 
     /// add installs the extension into the repo. If the extension already exists it will

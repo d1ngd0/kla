@@ -20,6 +20,11 @@ impl ExtensionSet {
     pub fn empty() -> Self {
         ExtensionSet { extensions: vec![] }
     }
+
+    /// into_inner returns the inner object
+    pub fn into_inner(self) -> Vec<Extension> {
+        self.extensions
+    }
 }
 
 impl Deref for ExtensionSet {
@@ -45,11 +50,22 @@ pub struct Extension {
     pub remote: Reference,
 }
 
+impl AsRef<Reference> for Extension {
+    fn as_ref(&self) -> &Reference {
+        &self.remote
+    }
+}
+
 impl Eq for Extension {}
 impl PartialEq for Extension {
     fn eq(&self, other: &Self) -> bool {
         self.remote.registry() == other.remote.registry()
             && self.remote.repository() == other.remote.repository()
+    }
+}
+impl PartialEq<Reference> for Extension {
+    fn eq(&self, other: &Reference) -> bool {
+        self.remote.registry() == other.registry() && self.remote.repository() == other.repository()
     }
 }
 

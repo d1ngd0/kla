@@ -20,7 +20,7 @@ pub struct Config {
     #[serde(rename = "config", default)]
     pub sub_configs: Vec<SubConfig>,
 
-    #[serde(rename = "", default = "extension_dir")]
+    #[serde(rename = "extension_dir", default = "extension_dir")]
     pub extension_dir: Option<PathBuf>,
 
     #[serde(rename = "environment", default)]
@@ -106,6 +106,14 @@ impl Config {
 
         // Finally do the same for collections
         self.collection_dir = self.collection_dir.take().map(|f| {
+            if f.is_relative() {
+                PathBuf::from(dir).join(f)
+            } else {
+                f
+            }
+        });
+
+        self.extension_dir = self.extension_dir.take().map(|f| {
             if f.is_relative() {
                 PathBuf::from(dir).join(f)
             } else {

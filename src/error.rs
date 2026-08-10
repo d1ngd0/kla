@@ -56,6 +56,8 @@ pub enum Error {
     PromptError(#[from] InquireError),
     #[error("{0}")]
     OCIError(#[from] oci_client::errors::OciDistributionError),
+    #[error("{0}")]
+    SemVerError(#[from] semver::Error),
 }
 
 impl From<&str> for Error {

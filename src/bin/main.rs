@@ -16,7 +16,7 @@ use kla::{
     AsyncOption, AsyncResult as _, CollectionBuilder, Environment, Error, ExtensionRepo,
     KlaRequest, Opt, Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
 };
-use log::{debug, info, trace, LevelFilter};
+use log::{debug, error, info, trace, LevelFilter};
 use oci_client::Reference;
 use regex::Regex;
 use reqwest::Response;
@@ -84,6 +84,7 @@ fn command() -> Command {
             )
             .subcommand(
                 Command::new("remove")
+                .arg(arg!(<image> "The OCI extension path that you want to remove"))
             )
             .subcommand(
                 Command::new("update")
@@ -663,15 +664,58 @@ fn run_environment(_args: &ArgMatches, _conf: &Config) -> Result<(), anyhow::Err
 //
 async fn run_extensions(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     match args.subcommand() {
-        Some(("add", m)) => run_add_extension(m, conf).await,
-        Some(("remove", _m)) => todo!(),
-        Some(("update", _m)) => todo!(),
-        Some(("list", _m)) => todo!(),
+        Some(("add", m)) => run_extension_add(m, conf).await,
+        Some(("remove", m)) => run_extension_remove(m, conf),
+        Some(("update", m)) => run_extension_update(m, conf).await,
+        Some(("list", m)) => run_extension_list(m, conf),
         _ => Ok(()),
     }
 }
 
-async fn run_add_extension(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+async fn run_extension_update(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    let extension_dir = conf
+        .extension_dir
+        .as_ref()
+        .ok_or(anyhow!("No extension directory specified!"))?;
+    let repo = ExtensionRepo::new(extension_dir)?;
+
+    for extension in repo.extensions()?.iter() {
+        match repo.update(extension, &mut stdout()).await {
+            Ok(_) => println!("{} up to date", extension.remote),
+            Err(err) => error!("{}: {}", extension.remote, err),
+        }
+    }
+
+    Ok(())
+}
+
+fn run_extension_list(_args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    let extension_dir = conf
+        .extension_dir
+        .as_ref()
+        .ok_or(anyhow!("No extension directory specified!"))?;
+    let repo = ExtensionRepo::new(extension_dir)?;
+
+    for extension in repo.extensions()?.iter() {
+        println!("{}", extension.remote);
+    }
+
+    Ok(())
+}
+
+fn run_extension_remove(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    let image = Reference::try_from(args.get_one::<String>("image").unwrap().as_str())
+        .context("parsing image path")?;
+    let extension_dir = conf
+        .extension_dir
+        .as_ref()
+        .ok_or(anyhow!("No extension directory specified!"))?;
+    let extensions = ExtensionRepo::new(extension_dir)?;
+    extensions.remove(&image)?;
+    Ok(())
+}
+
+async fn run_extension_add(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     let image = Reference::try_from(args.get_one::<String>("image").unwrap().as_str())
         .context("parsing image path")?;
     let extension_dir = conf
