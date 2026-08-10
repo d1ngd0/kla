@@ -1,4 +1,5 @@
 use flate2::read::GzDecoder;
+use log::error;
 use oci_client::{client::ClientConfig, secrets::RegistryAuth, Client, Reference};
 use semver::Version;
 use tar::Archive;
@@ -203,9 +204,16 @@ impl ExtensionRepo {
     pub fn apply(&self, config: &mut Config) -> KResult<()> {
         let extensions = self.extensions().context("fetching extensions")?;
         for extension in extensions.iter() {
-            config.merge(extension.try_into().with_context(|| {
+            match Config::try_from(extension).with_context(|| {
                 format!("loading extension configuration for {}", &extension.remote)
-            })?);
+            }) {
+                Ok(ext_config) => Some(ext_config),
+                Err(err) => {
+                    error!("{}: {}", extension.remote, err);
+                    None
+                }
+            }
+            .map(|ext_config| config.merge(ext_config));
         }
         Ok(())
     }
