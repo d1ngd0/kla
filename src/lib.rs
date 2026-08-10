@@ -4,6 +4,7 @@ mod bearer_token;
 mod collection;
 mod environment; // environment struct and logic
 mod error; // package error handling
+mod ext;
 mod filecache;
 mod oauth;
 mod opt;
@@ -21,6 +22,7 @@ pub use attributes::*;
 pub use collection::*;
 pub use environment::*;
 pub use error::*;
+pub use ext::*;
 pub use opt::*;
 pub use output::*;
 pub use reqwest::*;

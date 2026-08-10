@@ -6,7 +6,7 @@ use std::{
 use crate::{
     config::CollectedEnvironmentGroup, config::CollectedTemplateGroup, config::CollectionConfig,
     config::ConfigArgCollection, config::ExecutableTemplate, CachedEnvironment, EnvironmentLoader,
-    Output, Result, Specified,
+    KResult, Output, Specified,
 };
 use anyhow::anyhow;
 use clap::ArgMatches;
@@ -33,7 +33,7 @@ impl<'a, E: EnvironmentLoader<Specified> + Copy> CollectionBuilder<'a, E> {
         self
     }
 
-    pub fn build(self) -> Result<Collection> {
+    pub fn build(self) -> KResult<Collection> {
         let config = self
             .config
             .ok_or_else(|| anyhow!("must specify config for collection"))?;
@@ -75,7 +75,7 @@ impl DerefMut for Group {
 }
 
 impl Group {
-    fn run(&self, context: &Context, dry: bool) -> Vec<Result<Output>> {
+    fn run(&self, context: &Context, dry: bool) -> Vec<KResult<Output>> {
         let mut join_set = JoinSet::new();
         // GROSS
         let groups = self.0.clone();
@@ -114,7 +114,7 @@ impl Deref for Sets {
 }
 
 impl Sets {
-    pub fn run(&self, context: &Context, dry: bool) -> Vec<Result<Output>> {
+    pub fn run(&self, context: &Context, dry: bool) -> Vec<KResult<Output>> {
         self.iter().map(|v| v.run(context, dry)).flatten().collect()
     }
 }
@@ -132,7 +132,7 @@ pub struct Collection {
 }
 
 impl Collection {
-    pub async fn run(self, args: &ArgMatches, dry: bool) -> Result<()> {
+    pub async fn run(self, args: &ArgMatches, dry: bool) -> KResult<()> {
         let context = self.args.args_context(args)?;
         let outputs = self.templates.run(&context, dry);
 

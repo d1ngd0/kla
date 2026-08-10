@@ -14,7 +14,7 @@ use crate::{
     config::{CachedSecretValue, SecretValue},
     filecache::CacheFile,
     oauth::BrowserAuthorizer,
-    Authentication, Result,
+    Authentication, KResult,
 };
 
 use super::Authorizer;
@@ -91,7 +91,7 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
 }
 
 impl<T: Authorizer + Sync + Send> Authentication for OAuth<T> {
-    fn authorize(&self, builder: RequestBuilder) -> Result<RequestBuilder> {
+    fn authorize(&self, builder: RequestBuilder) -> KResult<RequestBuilder> {
         let token = self.token.fetch(|| self.oauth_flow())?;
         Ok(builder.bearer_auth(token))
     }
@@ -118,7 +118,7 @@ impl<T: Authorizer> OAuth<T> {
         PathBuf::from("/tmp").join(format!("{}.token", hex::encode(hasher.finalize())))
     }
 
-    pub fn oauth_flow(&self) -> Result<(String, chrono::Duration)> {
+    pub fn oauth_flow(&self) -> KResult<(String, chrono::Duration)> {
         // Create an OAuth2 client by specifying the client ID, client secret, authorization URL and
         // token URL.
         let client = BasicClient::new(ClientId::new(self.client_id.clone().to_string()?))

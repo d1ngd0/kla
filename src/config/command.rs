@@ -76,12 +76,12 @@ pub struct ConfigKV {
 }
 
 pub trait FilterWhen {
-    fn filter_when(&self, tmpl: &RenderGroup<'_>) -> crate::Result<bool>;
+    fn filter_when(&self, tmpl: &RenderGroup<'_>) -> crate::KResult<bool>;
 }
 
 impl FilterWhen for Vec<ConfigKV> {
     /// filter_when filters the when clause in the ConfigKV
-    fn filter_when(&self, tmpl: &RenderGroup<'_>) -> crate::Result<bool> {
+    fn filter_when(&self, tmpl: &RenderGroup<'_>) -> crate::KResult<bool> {
         self.iter()
             .filter(|v| v.name == tmpl.name)
             .next()
@@ -152,7 +152,7 @@ impl ConfigCommand {
             .into_iter()
             .filter(|f| f.file_type().map(|v| v.is_file()).unwrap_or(false))
             .map(|v| ConfigCommand::from_file(v.path()))
-            .collect::<crate::Result<Vec<ConfigCommand>>>()?;
+            .collect::<crate::KResult<Vec<ConfigCommand>>>()?;
 
         Ok(config)
     }
@@ -167,7 +167,7 @@ impl ConfigCommand {
         Ok(conf)
     }
 
-    pub fn templates<'a>(&'a self) -> crate::Result<Vec<(String, &'a String)>> {
+    pub fn templates<'a>(&'a self) -> crate::KResult<Vec<(String, &'a String)>> {
         let mut templates: Vec<(String, &'a String)> = vec![];
 
         if let Some(body) = self.body.as_ref() {
@@ -197,7 +197,7 @@ impl ConfigCommand {
     }
 
     // args_context returns a Tera Context object from the arguments specifified
-    pub fn args_context(&self, args: &ArgMatches) -> crate::Result<Context> {
+    pub fn args_context(&self, args: &ArgMatches) -> crate::KResult<Context> {
         self.args.args_context(args)
     }
 }
@@ -333,7 +333,7 @@ impl Deref for ConfigArgCollection {
 
 impl ConfigArgCollection {
     // args_context returns a Tera Context object from the arguments specifified
-    pub fn args_context(&self, args: &ArgMatches) -> crate::Result<Context> {
+    pub fn args_context(&self, args: &ArgMatches) -> crate::KResult<Context> {
         macro_rules! get_one {
     ($args:expr, $ty:ty, $name:expr) => {
         $args

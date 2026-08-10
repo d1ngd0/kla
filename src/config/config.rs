@@ -1,4 +1,4 @@
-use crate::{EnvironmentLoader, Error, Expand, Result, Specified};
+use crate::{EnvironmentLoader, Error, Expand, KResult, Specified};
 use anyhow::Context;
 use log::info;
 use serde::Deserialize;
@@ -20,11 +20,19 @@ pub struct Config {
     #[serde(rename = "config", default)]
     pub sub_configs: Vec<SubConfig>,
 
+    #[serde(rename = "", default = "extension_dir")]
+    pub extension_dir: Option<PathBuf>,
+
     #[serde(rename = "environment", default)]
     pub environment: Vec<Endpoint>,
 
     #[serde(rename = "collection")]
     pub collection_dir: Option<PathBuf>,
+}
+
+fn extension_dir() -> Option<PathBuf> {
+    directories::ProjectDirs::from("com", "kla", "kla")
+        .map(|dir| PathBuf::from(dir.config_dir()).join(".extensions"))
 }
 
 impl EnvironmentLoader<Specified> for &Config {
@@ -34,7 +42,7 @@ impl EnvironmentLoader<Specified> for &Config {
         self,
         env: S,
         attrs: Attributes,
-    ) -> Result<Specified>
+    ) -> KResult<Specified>
     where
         S: AsRef<str>,
     {
@@ -43,7 +51,7 @@ impl EnvironmentLoader<Specified> for &Config {
 }
 
 impl Config {
-    pub fn from_path<P>(path: P) -> Result<Self>
+    pub fn from_path<P>(path: P) -> KResult<Self>
     where
         P: AsRef<Path>,
     {
@@ -68,8 +76,11 @@ impl Config {
             .flatten();
 
         for sub_config in sub_configs {
-            config = config.merge(sub_config?)
+            config.merge(sub_config?);
         }
+
+        // TODO: Here we will look for the extension file at $extension_dir/extensions.toml and
+        // merge the config.toml file from every extension
 
         Ok(config)
     }
@@ -105,7 +116,7 @@ impl Config {
         self.default_client.resolve_working_dir(dir);
     }
 
-    pub fn from_list<S, I>(list: I) -> Result<Self>
+    pub fn from_list<S, I>(list: I) -> KResult<Self>
     where
         S: AsRef<str>,
         I: Iterator<Item = S>,
@@ -124,7 +135,7 @@ impl Config {
         Ok(config)
     }
 
-    pub fn merge(mut self, other: Self) -> Self {
+    pub fn merge(&mut self, other: Self) -> &mut Self {
         let mut other = other;
         // This should not merge, we are intentionally leaving this out, this can only
         // be specified in the root document
@@ -140,7 +151,7 @@ impl Config {
     // collection_path is given the name of a collection and renders the path for it.
     // The function just appends the name to the collection directory. If the extension,
     // `.toml`, is missing that is appeneded as well.
-    pub fn collection_path(&self, name: &str) -> Result<PathBuf> {
+    pub fn collection_path(&self, name: &str) -> KResult<PathBuf> {
         let name = if name.ends_with(".toml") {
             name.into()
         } else {
@@ -161,7 +172,7 @@ impl Config {
     }
 
     /// collections iterates over the collection_dir and returns each path it finds
-    pub fn collections(&self) -> Result<Box<dyn Iterator<Item = String>>> {
+    pub fn collections(&self) -> KResult<Box<dyn Iterator<Item = String>>> {
         let collection_dir = match self.collection_dir.as_ref() {
             Some(collection) => collection,
             None => return Ok(Box::new(std::iter::empty())),

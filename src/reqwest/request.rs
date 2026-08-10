@@ -6,7 +6,7 @@ use reqwest::{
 use std::{collections::HashMap, time::Duration};
 use std::{fmt::Display, str::from_utf8};
 
-use crate::{clap::edit_value, impl_opt, impl_when, Error, RenderGroup, Result};
+use crate::{clap::edit_value, impl_opt, impl_when, Error, KResult, RenderGroup};
 
 #[derive(Debug, Clone)]
 /// KeyValue enables you to turn a string like `key=value` into an actual key value
@@ -27,7 +27,7 @@ impl<const SEP: char> Display for KeyValue<SEP> {
 impl<const SEP: char> TryFrom<&String> for KeyValue<SEP> {
     type Error = crate::Error;
 
-    fn try_from(value: &String) -> Result<Self> {
+    fn try_from(value: &String) -> KResult<Self> {
         let mut parts = value.splitn(2, SEP);
 
         let name: String = parts
@@ -71,31 +71,31 @@ impl<'a, const SEP: char> TryFrom<RenderGroup<'a>> for KeyValue<SEP> {
 pub trait KlaRequestBuilder {
     // opt_headers takes the headers from the `--header` argument and applies them to the
     // request being created.
-    fn opt_headers<E, T, V>(self, headers: Option<T>) -> Result<RequestBuilder>
+    fn opt_headers<E, T, V>(self, headers: Option<T>) -> KResult<RequestBuilder>
     where
         E: Into<Error>,
         V: TryInto<KeyValue<':'>, Error = E>,
         T: Iterator<Item = V>;
 
-    fn opt_query<E, T, V>(self, headers: Option<T>) -> Result<RequestBuilder>
+    fn opt_query<E, T, V>(self, headers: Option<T>) -> KResult<RequestBuilder>
     where
         E: Into<Error>,
         V: TryInto<KeyValue<'='>, Error = E>,
         T: Iterator<Item = V>;
 
-    fn opt_form<E, T, V>(self, form: Option<T>) -> Result<RequestBuilder>
+    fn opt_form<E, T, V>(self, form: Option<T>) -> KResult<RequestBuilder>
     where
         E: Into<Error>,
         V: TryInto<KeyValue<'='>, Error = E>,
         T: Iterator<Item = V>;
 
-    fn opt_timeout(self, timeout: Option<&String>) -> Result<RequestBuilder>;
+    fn opt_timeout(self, timeout: Option<&String>) -> KResult<RequestBuilder>;
 
-    fn opt_version(self, version: Option<&String>) -> Result<RequestBuilder>;
+    fn opt_version(self, version: Option<&String>) -> KResult<RequestBuilder>;
 }
 
 impl KlaRequestBuilder for RequestBuilder {
-    fn opt_version(self, version: Option<&String>) -> Result<RequestBuilder> {
+    fn opt_version(self, version: Option<&String>) -> KResult<RequestBuilder> {
         if let None = version {
             return Ok(self);
         }
@@ -112,7 +112,7 @@ impl KlaRequestBuilder for RequestBuilder {
         Ok(self.version(version))
     }
 
-    fn opt_timeout(self, timeout: Option<&String>) -> Result<RequestBuilder> {
+    fn opt_timeout(self, timeout: Option<&String>) -> KResult<RequestBuilder> {
         if let None = timeout {
             return Ok(self);
         }
@@ -129,7 +129,7 @@ impl KlaRequestBuilder for RequestBuilder {
         Ok(self.timeout(d))
     }
 
-    fn opt_query<E, T, V>(self, query: Option<T>) -> Result<RequestBuilder>
+    fn opt_query<E, T, V>(self, query: Option<T>) -> KResult<RequestBuilder>
     where
         E: Into<Error>,
         V: TryInto<KeyValue<'='>, Error = E>,
@@ -155,7 +155,7 @@ impl KlaRequestBuilder for RequestBuilder {
         }
     }
 
-    fn opt_form<E, T, V>(self, form: Option<T>) -> Result<RequestBuilder>
+    fn opt_form<E, T, V>(self, form: Option<T>) -> KResult<RequestBuilder>
     where
         E: Into<Error>,
         V: TryInto<KeyValue<'='>, Error = E>,
@@ -181,7 +181,7 @@ impl KlaRequestBuilder for RequestBuilder {
         }
     }
 
-    fn opt_headers<E, T, V>(self, headers: Option<T>) -> Result<RequestBuilder>
+    fn opt_headers<E, T, V>(self, headers: Option<T>) -> KResult<RequestBuilder>
     where
         E: Into<Error>,
         V: TryInto<KeyValue<':'>, Error = E>,
@@ -213,11 +213,11 @@ impl KlaRequestBuilder for RequestBuilder {
 
 pub trait KlaRequest: Sized {
     #[allow(async_fn_in_trait)]
-    async fn edit(self, edit: Option<&bool>) -> Result<Self>;
+    async fn edit(self, edit: Option<&bool>) -> KResult<Self>;
 }
 
 impl KlaRequest for Request {
-    async fn edit(mut self, edit: Option<&bool>) -> Result<Self> {
+    async fn edit(mut self, edit: Option<&bool>) -> KResult<Self> {
         // if we aren't editing return right away
         if !edit.copied().unwrap_or_default() {
             return Ok(self);
@@ -237,4 +237,4 @@ impl KlaRequest for Request {
 
 impl_opt!(RequestBuilder, crate::Error);
 impl_when!(Request);
-impl_when!(Result<Request>);
+impl_when!(KResult<Request>);

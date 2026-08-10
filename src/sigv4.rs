@@ -108,11 +108,11 @@ impl Authentication for SigV4 {
     fn authorize(
         &self,
         builder: reqwest::RequestBuilder,
-    ) -> crate::Result<reqwest::RequestBuilder> {
+    ) -> crate::KResult<reqwest::RequestBuilder> {
         Ok(builder)
     }
 
-    fn sign(&self, req: Request) -> crate::Result<Request> {
+    fn sign(&self, req: Request) -> crate::KResult<Request> {
         Ok(SigV4::sign(&self, req)?)
     }
 }
@@ -126,7 +126,7 @@ impl TryFrom<config::SigV4> for SigV4 {
 }
 
 impl SigV4 {
-    pub async fn new(profile: Option<&String>, service: Option<&String>) -> crate::Result<SigV4> {
+    pub async fn new(profile: Option<&String>, service: Option<&String>) -> crate::KResult<SigV4> {
         let config = aws_config::ConfigLoader::default()
             .behavior_version(BehaviorVersion::latest())
             .with_some(profile, aws_config::ConfigLoader::profile_name)

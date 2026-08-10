@@ -8,7 +8,7 @@ use crate::config::Attributes;
 use crate::config::Config;
 use crate::config::Endpoint;
 use crate::environment::{specified::Specified, unspecified::Unspecified};
-use crate::{Error, Result};
+use crate::{Error, KResult};
 
 #[derive(Debug, Clone)]
 /// Optional allows you to either specify, or not specify the environment up front.
@@ -24,7 +24,7 @@ pub enum Optional {
 impl Optional {
     /// new takes an optional config, when supplied we run the config through Specified.
     /// when left None we use a default unspecified.
-    pub async fn new(config: Option<&Endpoint>, attrs: Attributes) -> Result<Self> {
+    pub async fn new(config: Option<&Endpoint>, attrs: Attributes) -> KResult<Self> {
         let env = match config {
             Some(config) => Optional::Specified(Specified::new(config, attrs).await?),
             None => Optional::Unspecified(Unspecified::new(attrs)?),
@@ -35,7 +35,7 @@ impl Optional {
     /// new takes an optional config, when supplied we run the config through Specified.
     /// when left None we use a default unspecified. Both paths specify the overrides when
     /// generating the underlying client for the environment
-    pub async fn new_with_priority(config: Option<&Endpoint>, attr: Attributes) -> Result<Self> {
+    pub async fn new_with_priority(config: Option<&Endpoint>, attr: Attributes) -> KResult<Self> {
         let env = match config {
             Some(config) => Optional::Specified(Specified::new_with_priority(config, attr).await?),
             None => Optional::Unspecified(Unspecified::new_with_priority(attr)?),
@@ -52,7 +52,7 @@ impl Optional {
         name: Option<S>,
         config: &Config,
         attrs: &Attributes,
-    ) -> Result<Self>
+    ) -> KResult<Self>
     where
         S: AsRef<str>,
     {
@@ -82,7 +82,7 @@ impl Optional {
 // Here we need to make sure to implement all the members, including the default ones, to make
 // sure we catch any custom stuff in the lower implementations
 impl Environment for Optional {
-    fn request<E, M, U>(&self, method: M, url: U) -> crate::Result<reqwest::RequestBuilder>
+    fn request<E, M, U>(&self, method: M, url: U) -> crate::KResult<reqwest::RequestBuilder>
     where
         E: Into<crate::Error>,
         M: TryInto<http::Method, Error = E>,
@@ -94,7 +94,7 @@ impl Environment for Optional {
         }
     }
 
-    async fn execute(&self, request: reqwest::Request) -> Result<reqwest::Response> {
+    async fn execute(&self, request: reqwest::Request) -> KResult<reqwest::Response> {
         match self {
             Optional::Specified(specified) => specified.execute(request).await,
             Optional::Unspecified(unspecified) => unspecified.execute(request).await,
@@ -115,28 +115,28 @@ impl Environment for Optional {
         }
     }
 
-    fn templates(&self) -> crate::Result<Box<dyn Iterator<Item = String>>> {
+    fn templates(&self) -> crate::KResult<Box<dyn Iterator<Item = String>>> {
         match self {
             Optional::Specified(specified) => specified.templates(),
             Optional::Unspecified(unspecified) => unspecified.templates(),
         }
     }
 
-    fn tmpl_path(&self, name: &str) -> crate::Result<std::path::PathBuf> {
+    fn tmpl_path(&self, name: &str) -> crate::KResult<std::path::PathBuf> {
         match self {
             Optional::Specified(specified) => specified.tmpl_path(name),
             Optional::Unspecified(unspecified) => unspecified.tmpl_path(name),
         }
     }
 
-    fn sign(&self, req: reqwest::Request) -> crate::Result<reqwest::Request> {
+    fn sign(&self, req: reqwest::Request) -> crate::KResult<reqwest::Request> {
         match self {
             Optional::Specified(specified) => specified.sign(req),
             Optional::Unspecified(unspecified) => unspecified.sign(req),
         }
     }
 
-    fn context(&self, context: tera::Context) -> Result<tera::Context> {
+    fn context(&self, context: tera::Context) -> KResult<tera::Context> {
         match self {
             Optional::Specified(specified) => specified.context(context),
             Optional::Unspecified(unspecified) => unspecified.context(context),

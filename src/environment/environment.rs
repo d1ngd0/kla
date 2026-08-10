@@ -8,20 +8,20 @@ use http::Method;
 use reqwest::{IntoUrl, Request, Response};
 use tera::Context;
 
-use crate::{config, Error, Result};
+use crate::{config, Error, KResult};
 
 /// Environment trait
 pub trait Environment: Send + Sync + std::fmt::Debug {
     /// request should return a RequestBuilder with any environment specific configurations
     /// already applied. It is expected that the implementation of environment already have
     /// a client created with any environment level specifics applied as well.
-    fn request<E, M, U>(&self, method: M, url: U) -> Result<reqwest::RequestBuilder>
+    fn request<E, M, U>(&self, method: M, url: U) -> KResult<reqwest::RequestBuilder>
     where
         E: Into<crate::Error>,
         M: TryInto<Method, Error = E>,
         U: IntoUrl;
 
-    fn execute(&self, request: Request) -> impl Future<Output = Result<Response>>;
+    fn execute(&self, request: Request) -> impl Future<Output = KResult<Response>>;
 
     // name returns the name of the client
     fn name(&self) -> &String;
@@ -33,7 +33,7 @@ pub trait Environment: Send + Sync + std::fmt::Debug {
     }
 
     /// templates iterates over the template_dir and returns each path it finds
-    fn templates(&self) -> Result<Box<dyn Iterator<Item = String>>> {
+    fn templates(&self) -> KResult<Box<dyn Iterator<Item = String>>> {
         let template_dir = match self.template_dir() {
             Some(template) => template,
             None => return Ok(Box::new(std::iter::empty())),
@@ -50,7 +50,7 @@ pub trait Environment: Send + Sync + std::fmt::Debug {
 
     // tmpl_path is given the name of a template and renders the path for it.
     // The function just appends the name to the template directory.
-    fn tmpl_path(&self, name: &str) -> Result<PathBuf> {
+    fn tmpl_path(&self, name: &str) -> KResult<PathBuf> {
         let name = if name.ends_with(".toml") {
             name.into()
         } else {
@@ -75,13 +75,13 @@ pub trait Environment: Send + Sync + std::fmt::Debug {
     /// been created. This makes sure that can happen. If you think you
     /// will sign or not call this function, since it just returns the provided
     /// request with the default implementation.
-    fn sign(&self, req: Request) -> Result<Request> {
+    fn sign(&self, req: Request) -> KResult<Request> {
         Ok(req)
     }
 
     /// context will take a context and add additional context to it from the
     /// environment.
-    fn context(&self, context: Context) -> Result<Context> {
+    fn context(&self, context: Context) -> KResult<Context> {
         Ok(context)
     }
 }
@@ -95,11 +95,11 @@ pub trait EnvironmentLoader<E: Environment> {
         self,
         env: S,
         attrs: config::Attributes,
-    ) -> Result<E>
+    ) -> KResult<E>
     where
         S: AsRef<str>;
 
-    fn load_environment_with_priority<S>(self, env: S, attrs: config::Attributes) -> Result<E>
+    fn load_environment_with_priority<S>(self, env: S, attrs: config::Attributes) -> KResult<E>
     where
         S: AsRef<str>,
         Self: Sized,
@@ -110,7 +110,7 @@ pub trait EnvironmentLoader<E: Environment> {
     #[allow(async_fn_in_trait)]
     /// load_environment allows the called to get an environment without providing overrides
     /// to the client builder
-    async fn async_load_environment<S>(self, env: S) -> Result<E>
+    async fn async_load_environment<S>(self, env: S) -> KResult<E>
     where
         S: AsRef<str>,
         Self: Sized,
@@ -119,7 +119,7 @@ pub trait EnvironmentLoader<E: Environment> {
             .await
     }
 
-    fn load_environment<S>(self, env: S) -> Result<E>
+    fn load_environment<S>(self, env: S) -> KResult<E>
     where
         S: AsRef<str>,
         Self: Sized,

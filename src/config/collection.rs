@@ -2,7 +2,7 @@ use std::{cell::RefCell, fs, ops::Deref, path::Path, rc::Rc};
 
 use crate::{
     config::command::ConfigArgCollection, config::ConfigCommand, CachedEnvironment, CachingLoader,
-    Environment, EnvironmentLoader, Ok as _, Opt as _, Output, Result, Specified, Template,
+    Environment, EnvironmentLoader, KResult, Ok as _, Opt as _, Output, Specified, Template,
     TemplateBuilder,
 };
 use anyhow::{anyhow, Context as _};
@@ -96,7 +96,7 @@ pub struct CollectedEnvironmentGroup<'a, L: EnvironmentLoader<Specified> + Copy>
 }
 
 impl<'a, L: EnvironmentLoader<Specified> + Copy> Iterator for CollectedEnvironmentGroup<'a, L> {
-    type Item = Result<ExecutableTemplate<CachedEnvironment<Specified>>>;
+    type Item = KResult<ExecutableTemplate<CachedEnvironment<Specified>>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let group = self.groups.get(self.index)?;
@@ -183,7 +183,7 @@ pub struct EnvironmentGroup<'a, L: EnvironmentLoader<Specified> + Copy> {
 }
 
 impl<'a, L: EnvironmentLoader<Specified> + Copy> Iterator for EnvironmentGroup<'a, L> {
-    type Item = Result<ExecutableTemplate<CachedEnvironment<Specified>>>;
+    type Item = KResult<ExecutableTemplate<CachedEnvironment<Specified>>>;
 
     /// Next returns the next environment with the specified iterator
     fn next(&mut self) -> Option<Self::Item> {
@@ -212,7 +212,7 @@ pub struct TemplateArgs {
 impl TemplateArgs {
     /// template will turn the TemplateArgs into a Template when given
     /// the environment it should be executing from.
-    pub fn template<E: Environment>(&self, env: E) -> Result<ExecutableTemplate<E>> {
+    pub fn template<E: Environment>(&self, env: E) -> KResult<ExecutableTemplate<E>> {
         let tmpl_config = match ConfigCommand::from_file(env.tmpl_path(&self.name)?.as_path()) {
             Ok(tmpl_config) => tmpl_config,
             Err(_) => {
@@ -239,19 +239,19 @@ pub struct ExecutableTemplate<E: Environment> {
 }
 
 impl<E: Environment> ExecutableTemplate<E> {
-    pub async fn run<C: AsRef<Context>>(self, context: C, dry: bool) -> Result<Output> {
+    pub async fn run<C: AsRef<Context>>(self, context: C, dry: bool) -> KResult<Output> {
         let args = self.args(context.as_ref())?;
         self.tmpl.run_matches_from(&self.env, args, dry).await
     }
 
     // args takes the context and applies it (via tera) to the arguments going
     // into the template
-    pub fn args(&self, context: &Context) -> Result<Vec<String>> {
+    pub fn args(&self, context: &Context) -> KResult<Vec<String>> {
         let res = self
             .args
             .iter()
             .map(|s| Ok(Tera::one_off(s, context, true)?))
-            .collect::<Result<Vec<_>>>()
+            .collect::<KResult<Vec<_>>>()
             .with_context(|| format!("could not render arguemtn template"))?;
         Ok(res)
     }
@@ -277,7 +277,7 @@ pub struct CollectionConfig {
 
 impl CollectionConfig {
     /// from_file creates a new Collection from a file specified
-    pub fn from_file<P>(path: P) -> Result<CollectionConfig>
+    pub fn from_file<P>(path: P) -> KResult<CollectionConfig>
     where
         P: AsRef<Path>,
     {
@@ -299,7 +299,7 @@ impl CollectionConfig {
 
     // with name takes a name and a toml configuration string and returns
     // a collection
-    pub fn with_name<S, C>(name: S, conf: C) -> Result<CollectionConfig>
+    pub fn with_name<S, C>(name: S, conf: C) -> KResult<CollectionConfig>
     where
         S: Into<String>,
         C: AsRef<str>,
@@ -310,7 +310,7 @@ impl CollectionConfig {
     }
 
     // args_context returns a Tera Context object from the arguments specifified
-    pub fn args_context(&self, args: &ArgMatches) -> crate::Result<Context> {
+    pub fn args_context(&self, args: &ArgMatches) -> crate::KResult<Context> {
         self.args.args_context(args)
     }
 

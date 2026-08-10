@@ -2,7 +2,7 @@ use std::{collections::HashMap, future::Future, ops::Deref, path::Path, sync::Ar
 
 use reqwest::Response;
 
-use crate::{config, Environment, EnvironmentLoader, Result};
+use crate::{config, Environment, EnvironmentLoader, KResult};
 
 #[derive(Clone, Debug)]
 /// CachingLoader will load environments but cache their clients for future use
@@ -39,7 +39,7 @@ impl<E: Environment, L: EnvironmentLoader<E> + Copy> EnvironmentLoader<CachedEnv
         self,
         name: S,
         attrs: config::Attributes,
-    ) -> crate::Result<CachedEnvironment<E>>
+    ) -> crate::KResult<CachedEnvironment<E>>
     where
         S: AsRef<str>,
     {
@@ -71,7 +71,7 @@ impl<E: Environment, L: EnvironmentLoader<E>> EnvironmentLoader<CachedEnvironmen
         self,
         name: S,
         attrs: config::Attributes,
-    ) -> crate::Result<CachedEnvironment<E>>
+    ) -> crate::KResult<CachedEnvironment<E>>
     where
         S: AsRef<str>,
     {
@@ -119,7 +119,7 @@ impl<E: Environment> Deref for CachedEnvironment<E> {
 /// as such, we must implement all methods to ensure the underlying implementation
 /// is used
 impl<T: Environment> Environment for CachedEnvironment<T> {
-    fn request<E, M, U>(&self, method: M, url: U) -> Result<reqwest::RequestBuilder>
+    fn request<E, M, U>(&self, method: M, url: U) -> KResult<reqwest::RequestBuilder>
     where
         E: Into<crate::Error>,
         M: TryInto<http::Method, Error = E>,
@@ -128,7 +128,7 @@ impl<T: Environment> Environment for CachedEnvironment<T> {
         self.env.request(method, url)
     }
 
-    fn execute(&self, request: reqwest::Request) -> impl Future<Output = Result<Response>> {
+    fn execute(&self, request: reqwest::Request) -> impl Future<Output = KResult<Response>> {
         self.env.execute(request)
     }
 
@@ -140,19 +140,19 @@ impl<T: Environment> Environment for CachedEnvironment<T> {
         self.env.template_dir()
     }
 
-    fn tmpl_path(&self, name: &str) -> Result<std::path::PathBuf> {
+    fn tmpl_path(&self, name: &str) -> KResult<std::path::PathBuf> {
         self.env.tmpl_path(name)
     }
 
-    fn templates(&self) -> Result<Box<dyn Iterator<Item = String>>> {
+    fn templates(&self) -> KResult<Box<dyn Iterator<Item = String>>> {
         self.env.templates()
     }
 
-    fn context(&self, context: tera::Context) -> Result<tera::Context> {
+    fn context(&self, context: tera::Context) -> KResult<tera::Context> {
         self.env.context(context)
     }
 
-    fn sign(&self, req: reqwest::Request) -> Result<reqwest::Request> {
+    fn sign(&self, req: reqwest::Request) -> KResult<reqwest::Request> {
         self.env.sign(req)
     }
 }

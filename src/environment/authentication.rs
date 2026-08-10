@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    basic_auth::BasicAuth, bearer_token::BearerToken, config, oauth::OAuth, ropc::ROPC, Result,
+    basic_auth::BasicAuth, bearer_token::BearerToken, config, oauth::OAuth, ropc::ROPC, KResult,
     SigV4,
 };
 use reqwest::{Request, RequestBuilder};
@@ -10,14 +10,14 @@ use serde::{Deserialize, Serialize};
 pub trait Authentication: std::fmt::Debug + Send + Sync {
     /// authorize allows you to help craft the request prior to having one
     /// This must be implemented, even if it just returns the requestbuilder
-    fn authorize(&self, builder: RequestBuilder) -> Result<RequestBuilder>;
+    fn authorize(&self, builder: RequestBuilder) -> KResult<RequestBuilder>;
 
     /// sign is an optional function that takes the incoming request
     /// and returns a new request, or the same request modified. This
     /// function is passed a fully complete request, right before we
     /// send it, so we can sign the request if the authentication
     /// method requires that.
-    fn sign(&self, req: Request) -> Result<Request> {
+    fn sign(&self, req: Request) -> KResult<Request> {
         Ok(req)
     }
 }
@@ -25,7 +25,7 @@ pub trait Authentication: std::fmt::Debug + Send + Sync {
 impl TryFrom<config::Authentication> for Arc<dyn Authentication> {
     type Error = crate::Error;
 
-    fn try_from(value: config::Authentication) -> Result<Self> {
+    fn try_from(value: config::Authentication) -> KResult<Self> {
         match value {
             config::Authentication::SigV4(sig_v4) => {
                 let val: Arc<dyn crate::Authentication> = Arc::new(SigV4::try_from(sig_v4)?);
@@ -66,7 +66,7 @@ impl Default for NoopAuth {
 }
 
 impl Authentication for NoopAuth {
-    fn authorize(&self, builder: RequestBuilder) -> Result<RequestBuilder> {
+    fn authorize(&self, builder: RequestBuilder) -> KResult<RequestBuilder> {
         return Ok(builder);
     }
 }

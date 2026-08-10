@@ -1,10 +1,10 @@
-use crate::Result;
+use crate::KResult;
 
 /// URLBuilders take in a path and render a fully qualified URL.
 /// The input will be coming from the user, so it may not be formatted
 /// perfectly (trailing and preceeding slashes etc).
 pub trait URLBuilder {
-    fn build(&self, path: &str) -> Result<String>;
+    fn build(&self, path: &str) -> KResult<String>;
 }
 
 #[derive(Clone, Debug)]
@@ -35,7 +35,7 @@ impl URLBuilder for PrefixURLBuilder {
     // build creates the url by appending the path onto the prefix. It
     // also ensures the uri does not have any preceeding forward slashes
     // since the prefix will have one.
-    fn build(&self, path: &str) -> Result<String> {
+    fn build(&self, path: &str) -> KResult<String> {
         let mut url = self.prefix.clone();
         url.push_str(path.trim_start_matches("/"));
         Ok(url)
@@ -57,7 +57,7 @@ struct LiteralURLBuilder {}
 impl URLBuilder for LiteralURLBuilder {
     /// build just returns the path as a new string, it assumes the path
     /// given is a fully qualified domain.
-    fn build(&self, path: &str) -> Result<String> {
+    fn build(&self, path: &str) -> KResult<String> {
         Ok(path.into())
     }
 }
@@ -83,7 +83,7 @@ impl AssumingURLBuilder {
 impl URLBuilder for AssumingURLBuilder {
     /// build looks at the path, if it starts with http:// or https:// we assume
     /// the path is literal, and return that. If not we use a prefix builder
-    fn build(&self, path: &str) -> Result<String> {
+    fn build(&self, path: &str) -> KResult<String> {
         if path.starts_with("http://") || path.starts_with("https://") {
             return LiteralURLBuilder::default().build(path);
         } else {
@@ -138,7 +138,7 @@ impl OptBaseURLBuilder {
 impl URLBuilder for OptBaseURLBuilder {
     /// build will call the underlying AssumingURLBuilder when we have a base, and will
     /// call a LiteralURLBuilder when there is no path
-    fn build(&self, path: &str) -> Result<String> {
+    fn build(&self, path: &str) -> KResult<String> {
         match self {
             OptBaseURLBuilder::Empty => LiteralURLBuilder::default().build(path),
             OptBaseURLBuilder::Base(assuming_urlbuilder) => assuming_urlbuilder.build(path),

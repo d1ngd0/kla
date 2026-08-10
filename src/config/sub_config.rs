@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::KResult;
 use anyhow::Context;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -16,7 +16,7 @@ pub enum SubConfig {
 }
 
 impl SubConfig {
-    pub fn to_configs<P>(&self, working_dir: P) -> Box<dyn Iterator<Item = Result<Config>>>
+    pub fn to_configs<P>(&self, working_dir: P) -> Box<dyn Iterator<Item = KResult<Config>>>
     where
         P: AsRef<Path>,
     {

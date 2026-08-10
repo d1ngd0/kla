@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use reqwest::{Client, ClientBuilder};
 
-use crate::{config, Attributes, Environment, Result, WithAttributes};
+use crate::{config, Attributes, Environment, KResult, WithAttributes};
 
 #[derive(Clone, Debug)]
 /// Unspecified is an environment which does not have any configured
@@ -17,13 +17,13 @@ pub struct Unspecified {
 impl Unspecified {
     /// new is just shorthand for Self::default(). This creates a default
     /// reqwest::Client for making the requests, and a name of "default"
-    pub fn new(attrs: config::Attributes) -> Result<Self> {
+    pub fn new(attrs: config::Attributes) -> KResult<Self> {
         Self::new_with_priority(attrs)
     }
 
     /// new_with_priority creates an unspecified environment where you get to
     /// alter the client build attributes.
-    pub fn new_with_priority(attrs: config::Attributes) -> Result<Self> {
+    pub fn new_with_priority(attrs: config::Attributes) -> KResult<Self> {
         let attrs = attrs.try_into()?;
         Ok(Self {
             name: String::from("default"),
@@ -48,7 +48,7 @@ impl Default for Unspecified {
 impl Environment for Unspecified {
     /// request assumes the url is a fully qualified url, nothing is done to change
     /// that. A request builder is returned from the internal client
-    fn request<E, M, U>(&self, method: M, url: U) -> Result<reqwest::RequestBuilder>
+    fn request<E, M, U>(&self, method: M, url: U) -> KResult<reqwest::RequestBuilder>
     where
         E: Into<crate::Error>,
         M: TryInto<http::Method, Error = E>,
@@ -60,7 +60,7 @@ impl Environment for Unspecified {
     }
 
     /// Execute renders the request
-    async fn execute(&self, request: reqwest::Request) -> Result<reqwest::Response> {
+    async fn execute(&self, request: reqwest::Request) -> KResult<reqwest::Response> {
         self.client
             .execute(request)
             .await

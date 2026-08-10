@@ -37,7 +37,7 @@ impl Authentication for BasicAuth {
     fn authorize(
         &self,
         builder: reqwest::RequestBuilder,
-    ) -> crate::Result<reqwest::RequestBuilder> {
+    ) -> crate::KResult<reqwest::RequestBuilder> {
         Ok(builder.basic_auth(
             self.username.to_string()?,
             self.password

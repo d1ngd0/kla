@@ -11,9 +11,8 @@ use tera::{Context, Tera};
 use crate::clap::ArgOptions;
 use crate::config::{ConfigCommand, FilterWhen as _};
 use crate::{
-    AsyncResult as _, Attributes, Environment, Error, FetchMany as _, KlaRequest as _,
-    KlaRequestBuilder, Opt, Output, OutputBuilder, Result, Sigv4Request, When as _,
-    WithAttributes as _,
+    AsyncResult as _, Attributes, Environment, Error, FetchMany as _, KResult, KlaRequest as _,
+    KlaRequestBuilder, Opt, Output, OutputBuilder, Sigv4Request, When as _, WithAttributes as _,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -52,7 +51,7 @@ impl TemplateBuilder {
     pub fn try_config<E: Into<Error>, C: TryInto<ConfigCommand, Error = E>>(
         mut self,
         config: C,
-    ) -> Result<Self> {
+    ) -> KResult<Self> {
         self.config = Some(config.try_into().map_err(E::into)?);
         Ok(self)
     }
@@ -70,13 +69,13 @@ impl TemplateBuilder {
     pub fn try_context<E: Into<crate::Error>, A: TryInto<Context, Error = E>>(
         mut self,
         context: A,
-    ) -> Result<Self> {
+    ) -> KResult<Self> {
         self.context = Some(context.try_into().map_err(E::into)?);
         Ok(self)
     }
 
     /// build the template
-    pub fn build(self) -> Result<Template> {
+    pub fn build(self) -> KResult<Template> {
         let Self { config, context } = self;
 
         let config =
@@ -113,7 +112,7 @@ impl TryFrom<&Template> for Command {
 }
 
 impl Template {
-    pub async fn run_matches_from<I, T, E>(&self, env: &E, args: I, dry: bool) -> Result<Output>
+    pub async fn run_matches_from<I, T, E>(&self, env: &E, args: I, dry: bool) -> KResult<Output>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
@@ -137,7 +136,7 @@ impl Template {
         self.run(env, &args, &args).await
     }
 
-    pub async fn run<E>(&self, env: &E, args: &ArgMatches, parent: &ArgMatches) -> Result<Output>
+    pub async fn run<E>(&self, env: &E, args: &ArgMatches, parent: &ArgMatches) -> KResult<Output>
     where
         E: Environment,
     {
@@ -190,7 +189,7 @@ impl Template {
                         Ok(false) => None,
                         Err(err) => Some(Err(err)),
                     })
-                    .collect::<Result<Vec<_>>>()?
+                    .collect::<KResult<Vec<_>>>()?
                     .into_iter(),
             ))
             .with_context(|| format!("headers could not be loaded"))?
@@ -202,7 +201,7 @@ impl Template {
                         Ok(false) => None,
                         Err(err) => Some(Err(err)),
                     })
-                    .collect::<Result<Vec<_>>>()?
+                    .collect::<KResult<Vec<_>>>()?
                     .into_iter(),
             ))
             .with_context(|| format!("query params could not be loaded",))?
@@ -214,7 +213,7 @@ impl Template {
                         Ok(false) => None,
                         Err(err) => Some(Err(err)),
                     })
-                    .collect::<Result<Vec<_>>>()?
+                    .collect::<KResult<Vec<_>>>()?
                     .into_iter(),
             ))
             .with_context(|| format!("form params could not be loaded",))?

@@ -31,7 +31,7 @@ impl Authentication for BearerToken {
     fn authorize(
         &self,
         builder: reqwest::RequestBuilder,
-    ) -> crate::Result<reqwest::RequestBuilder> {
+    ) -> crate::KResult<reqwest::RequestBuilder> {
         Ok(builder.bearer_auth(self.token.to_string()?))
     }
 }

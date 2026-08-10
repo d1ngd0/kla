@@ -5,7 +5,7 @@ use url::Url;
 
 use super::Authorizer;
 
-use crate::Result;
+use crate::KResult;
 
 /// BrowserAuthorizer is an authorizer that opens your browser to
 /// login to the authorizer, then starts an http server locally to
@@ -25,7 +25,7 @@ impl BrowserAuthorizer {
 }
 
 impl Authorizer for BrowserAuthorizer {
-    fn authorize(&self, url: Url, _csrf: CsrfToken) -> Result<AuthorizationCode> {
+    fn authorize(&self, url: Url, _csrf: CsrfToken) -> KResult<AuthorizationCode> {
         webbrowser::open(url.as_str())?;
 
         let server = if self.is_ssl() {

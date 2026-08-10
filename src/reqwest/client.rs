@@ -1,4 +1,4 @@
-use crate::{impl_opt, impl_when, Error, Result};
+use crate::{impl_opt, impl_when, Error, KResult};
 
 use reqwest::{Certificate, ClientBuilder};
 use std::path::PathBuf;
@@ -7,30 +7,31 @@ use std::{fs, path::Path, time::Duration};
 // KlaClientBuilder is a trait that adds additional functionality to the reqwest::ClientBuilder
 // object. These functions make it easier to marry the functionality with Clap
 pub trait KlaClientBuilder {
-    fn opt_proxy(self, proxy: Option<&String>, userpass: Option<&String>) -> Result<ClientBuilder>;
+    fn opt_proxy(self, proxy: Option<&String>, userpass: Option<&String>)
+        -> KResult<ClientBuilder>;
 
     fn opt_proxy_http(
         self,
         proxy: Option<&String>,
         userpass: Option<&String>,
-    ) -> Result<ClientBuilder>;
+    ) -> KResult<ClientBuilder>;
 
     fn opt_proxy_https(
         self,
         proxy: Option<&String>,
         userpass: Option<&String>,
-    ) -> Result<ClientBuilder>;
+    ) -> KResult<ClientBuilder>;
 
-    fn opt_connect_timeout(self, timeout: Option<&String>) -> Result<ClientBuilder>;
+    fn opt_connect_timeout(self, timeout: Option<&String>) -> KResult<ClientBuilder>;
 
-    fn opt_certificate<'a, T>(self, certificates: Option<T>) -> Result<ClientBuilder>
+    fn opt_certificate<'a, T>(self, certificates: Option<T>) -> KResult<ClientBuilder>
     where
         T: Iterator<Item = &'a PathBuf>;
 }
 
 // Implementation of the trait to extend ClientBuilder
 impl KlaClientBuilder for ClientBuilder {
-    fn opt_certificate<'a, T>(self, certificates: Option<T>) -> Result<ClientBuilder>
+    fn opt_certificate<'a, T>(self, certificates: Option<T>) -> KResult<ClientBuilder>
     where
         T: Iterator<Item = &'a PathBuf>,
     {
@@ -66,7 +67,11 @@ impl KlaClientBuilder for ClientBuilder {
         Ok(me)
     }
 
-    fn opt_proxy(self, proxy: Option<&String>, userpass: Option<&String>) -> Result<ClientBuilder> {
+    fn opt_proxy(
+        self,
+        proxy: Option<&String>,
+        userpass: Option<&String>,
+    ) -> KResult<ClientBuilder> {
         let proxy = if let Some(proxy) = proxy {
             reqwest::Proxy::all(proxy)?
         } else {
@@ -89,7 +94,7 @@ impl KlaClientBuilder for ClientBuilder {
         self,
         proxy: Option<&String>,
         userpass: Option<&String>,
-    ) -> Result<ClientBuilder> {
+    ) -> KResult<ClientBuilder> {
         if let None = proxy {
             return Ok(self);
         }
@@ -108,7 +113,7 @@ impl KlaClientBuilder for ClientBuilder {
         self,
         proxy: Option<&String>,
         userpass: Option<&String>,
-    ) -> Result<ClientBuilder> {
+    ) -> KResult<ClientBuilder> {
         if let None = proxy {
             return Ok(self);
         }
@@ -122,7 +127,7 @@ impl KlaClientBuilder for ClientBuilder {
         Ok(self.proxy(proxy.basic_auth(parts.next().unwrap(), parts.next().unwrap_or_default())))
     }
 
-    fn opt_connect_timeout(self, timeout: Option<&String>) -> Result<ClientBuilder> {
+    fn opt_connect_timeout(self, timeout: Option<&String>) -> KResult<ClientBuilder> {
         if let None = timeout {
             return Ok(self);
         }

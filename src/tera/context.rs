@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::KResult;
 use http::Version;
 use reqwest::Response;
 use serde::ser::Serialize;
@@ -20,7 +20,7 @@ impl ContextBuilder {
         self
     }
 
-    pub async fn insert_response(mut self, response: Response) -> Result<Self> {
+    pub async fn insert_response(mut self, response: Response) -> KResult<Self> {
         self.data.insert("resp_status", response.status().as_str());
 
         let headers = response.headers();

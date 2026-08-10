@@ -1,7 +1,7 @@
 use std::{
     env,
     fs::{self, OpenOptions},
-    io::Write,
+    io::{stdout, Write},
     path::PathBuf,
     process::exit,
     str::from_utf8,
@@ -13,10 +13,11 @@ use clap::{arg, command, ArgAction, ArgMatches, Command};
 use kla::{
     clap::{arg_file_writer, ArgOptions},
     config::{Attributes, CollectionConfig, Config, ConfigCommand},
-    AsyncOption, AsyncResult as _, CollectionBuilder, Environment, Error, KlaRequest, Opt,
-    Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
+    AsyncOption, AsyncResult as _, CollectionBuilder, Environment, Error, ExtensionRepo,
+    KlaRequest, Opt, Optional, OutputBuilder, Sigv4Request, TemplateBuilder, When,
 };
 use log::{debug, info, trace, LevelFilter};
+use oci_client::Reference;
 use regex::Regex;
 use reqwest::Response;
 use skim::{prelude::SkimOptionsBuilder, Skim, SkimItem};
@@ -66,14 +67,27 @@ fn command() -> Command {
             .alias("env")
         )
         .subcommand(
-            Command::new("oauth2")
-            .alias("oauth")
-            .about("Sign into an environment")
-        )
-        .subcommand(
             Command::new("init")
             .arg(arg!(--force "ignore if the file exists, truncate it and write the default config again").action(ArgAction::SetTrue))
             .about("Create the initial config file")
+        )
+        .subcommand(
+            Command::new("extension")
+            .subcommand_required(true)
+            .alias("ext")
+            .subcommand(
+                Command::new("list")
+            )
+            .subcommand(
+                Command::new("add")
+                .arg(arg!(<image> "The OCI extension path that you want to pull in"))
+            )
+            .subcommand(
+                Command::new("remove")
+            )
+            .subcommand(
+                Command::new("update")
+            )
         )
 }
 
@@ -121,7 +135,7 @@ async fn run() -> Result<(), anyhow::Error> {
         )
         .get_matches();
 
-    let config = if let Some(path) = m.get_one::<String>("config") {
+    let mut config = if let Some(path) = m.get_one::<String>("config") {
         Config::from_path(path)?
     } else {
         Config::from_list(
@@ -136,6 +150,11 @@ async fn run() -> Result<(), anyhow::Error> {
         )?
     };
     log::debug!("Config Contents: {:?}", config);
+
+    if let Some(ext_dir) = config.extension_dir.as_ref() {
+        let repo = ExtensionRepo::new(ext_dir)?;
+        repo.apply(&mut config)?;
+    }
 
     // check the env flag, and then the default config for the correct
     // environment to use. If you ever need to get the environment
@@ -183,8 +202,8 @@ async fn run() -> Result<(), anyhow::Error> {
             .await
         }
         Some(("environment", envs)) => run_environment(envs, &config),
-        Some(("oauth2", envs)) => run_oauth2(envs, &config, Attributes::from(&m)),
         Some(("init", envs)) => run_init(envs),
+        Some(("extension", envs)) => run_extensions(envs, &config).await,
         _ => run_root(&m, &config, Attributes::from(&m)).await,
     };
 
@@ -641,6 +660,26 @@ fn run_environment(_args: &ArgMatches, _conf: &Config) -> Result<(), anyhow::Err
     Ok(())
 }
 
-fn run_oauth2(_args: &ArgMatches, _conf: &Config, _attrs: Attributes) -> Result<(), anyhow::Error> {
+//
+async fn run_extensions(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    match args.subcommand() {
+        Some(("add", m)) => run_add_extension(m, conf).await,
+        Some(("remove", _m)) => todo!(),
+        Some(("update", _m)) => todo!(),
+        Some(("list", _m)) => todo!(),
+        _ => Ok(()),
+    }
+}
+
+async fn run_add_extension(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    let image = Reference::try_from(args.get_one::<String>("image").unwrap().as_str())
+        .context("parsing image path")?;
+    let extension_dir = conf
+        .extension_dir
+        .as_ref()
+        .ok_or(anyhow!("No extension directory specified!"))?;
+    let extensions = ExtensionRepo::new(extension_dir)?;
+    extensions.add(&image, &mut stdout()).await?;
+
     Ok(())
 }

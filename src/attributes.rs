@@ -4,7 +4,7 @@ use anyhow::Context;
 use http::Version;
 use reqwest::{redirect, ClientBuilder, Proxy, Request, RequestBuilder};
 
-use crate::{config, Authentication, Error, NoopAuth, Opt, Result};
+use crate::{config, Authentication, Error, KResult, NoopAuth, Opt};
 
 #[derive(Clone, Debug)]
 pub struct Attributes {
@@ -129,7 +129,7 @@ impl TryFrom<config::Attributes> for Attributes {
             auth: value
                 .auth
                 .map(|auth| {
-                    let auth: Result<Arc<dyn Authentication>> = auth.try_into();
+                    let auth: KResult<Arc<dyn Authentication>> = auth.try_into();
                     auth
                 })
                 .transpose()?

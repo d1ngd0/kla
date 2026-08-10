@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{Error, Result};
+use crate::{Error, KResult};
 use inquire::{Password, PasswordDisplayMode};
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +51,7 @@ impl SecretValue {
         CachedSecretValue(Arc::new(Mutex::new(Some(self))))
     }
 
-    pub fn to_string(self) -> Result<String> {
+    pub fn to_string(self) -> KResult<String> {
         match self {
             SecretValue::File { path, trim } => {
                 let s = read_to_string(path)?;
@@ -90,7 +90,7 @@ impl TryFrom<SecretValue> for String {
     type Error = crate::Error;
 
     /// Consume the ClientSecret and return an oauth::ClientSecret
-    fn try_from(value: SecretValue) -> Result<Self> {
+    fn try_from(value: SecretValue) -> KResult<Self> {
         value.to_string()
     }
 }
@@ -108,7 +108,7 @@ impl CachedSecretValue {
 }
 
 impl CachedSecretValue {
-    pub fn to_string(&self) -> Result<String> {
+    pub fn to_string(&self) -> KResult<String> {
         let mut lock = self.0.lock().expect("poisoned lock");
         let val = lock
             .take()
@@ -140,7 +140,7 @@ impl From<&str> for CachedSecretValue {
 impl TryFrom<&CachedSecretValue> for String {
     type Error = crate::Error;
 
-    fn try_from(value: &CachedSecretValue) -> Result<Self> {
+    fn try_from(value: &CachedSecretValue) -> KResult<Self> {
         value.to_string()
     }
 }

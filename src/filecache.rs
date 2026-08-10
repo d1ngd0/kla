@@ -10,7 +10,7 @@ use std::{
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
-use crate::Result;
+use crate::KResult;
 
 #[derive(Clone, Debug)]
 pub struct CacheFile {
@@ -32,9 +32,9 @@ impl CacheFile {
         }
     }
 
-    pub fn fetch<Fn>(&self, constructor: Fn) -> Result<String>
+    pub fn fetch<Fn>(&self, constructor: Fn) -> KResult<String>
     where
-        Fn: FnOnce() -> Result<(String, chrono::Duration)>,
+        Fn: FnOnce() -> KResult<(String, chrono::Duration)>,
     {
         // First check if the contents are in memory, if they are and aren't expired let's return that
         let contents = self.contents.read().unwrap();

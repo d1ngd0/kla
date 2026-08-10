@@ -45,6 +45,10 @@ hex = "0.4.3"
 tiny_http = {version = "0.12.0", features = ["ssl-rustls"]}
 rcgen = "0.14.8"
 duration-str = "0.21.0"
+oci-client = "0.17.0"
+directories = "6.0.0"
+flate2 = "1.1.9"
+tar = "0.4.46"
 
 [dev-dependencies]
 tempfile = "3.27.0"

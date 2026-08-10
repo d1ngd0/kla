@@ -1,6 +1,6 @@
 use std::{fmt::Debug, io::Cursor};
 
-use crate::{impl_opt, impl_when, ContextBuilder, FetchMany, Result};
+use crate::{impl_opt, impl_when, ContextBuilder, FetchMany, KResult};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use reqwest::Response;
 use tera::Tera;
@@ -25,7 +25,7 @@ impl OutputBuilder {
     }
 
     // opt template sets the template
-    pub fn template<S: AsRef<str>>(mut self, template: S) -> Result<Self> {
+    pub fn template<S: AsRef<str>>(mut self, template: S) -> KResult<Self> {
         self.tmpl.add_raw_template("body", template.as_ref())?;
         Ok(self)
     }
@@ -40,7 +40,7 @@ impl OutputBuilder {
     // build creates the output
     // TODO: We need to set context from arguments here as well so
     // args can manipulate the output template
-    pub async fn build(self, response: Response) -> Result<Output> {
+    pub async fn build(self, response: Response) -> KResult<Output> {
         let OutputBuilder {
             tmpl,
             desired_location,
