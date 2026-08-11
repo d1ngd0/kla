@@ -73,12 +73,13 @@ impl ExtensionRepo {
     fn commit_extension(&self, ext: Extension) -> KResult<()> {
         let mut extensions = self.extensions()?;
 
-        if !extensions.iter().any(|v| v == &ext) {
-            extensions.push(ext);
-            self.commit_extensions(extensions)
-                .context("commiting extensions")?;
+        match extensions.iter().position(|f| f == &ext) {
+            Some(i) => extensions[i] = ext,
+            None => extensions.push(ext),
         }
-        Ok(())
+
+        self.commit_extensions(extensions)
+            .context("commiting extensions")
     }
 
     /// commit_extensions writes extensions back to the file
