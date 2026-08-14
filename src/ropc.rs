@@ -7,7 +7,7 @@ use sha2::{Digest as _, Sha256};
 use crate::{
     config::{self, CachedSecretValue},
     filecache::CacheFile,
-    Authentication, KResult,
+    Authentication, AuthenticationBuilder, KResult,
 };
 
 #[derive(Deserialize, Debug)]
@@ -26,10 +26,17 @@ pub struct ROPC {
     token: CacheFile,
 }
 
-impl Authentication for ROPC {
+impl Authentication<RequestBuilder> for ROPC {
     fn authorize(&self, builder: RequestBuilder) -> KResult<RequestBuilder> {
         let token = self.token.fetch(|| self.ropc_flow())?;
         Ok(builder.bearer_auth(token))
+    }
+}
+
+impl Authentication<AuthenticationBuilder> for ROPC {
+    fn authorize(&self, builder: AuthenticationBuilder) -> KResult<AuthenticationBuilder> {
+        let token = self.token.fetch(|| self.ropc_flow())?;
+        Ok(builder.bearer(token))
     }
 }
 

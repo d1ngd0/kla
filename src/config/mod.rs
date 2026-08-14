@@ -36,3 +36,6 @@ pub use authentication::*;
 
 mod helpers;
 pub use helpers::*;
+
+mod extension;
+pub use extension::*;

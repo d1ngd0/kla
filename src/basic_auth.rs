@@ -1,6 +1,6 @@
 use crate::{
     config::{self, CachedSecretValue},
-    Authentication,
+    Authentication, AuthenticationBuilder,
 };
 
 #[derive(Clone, Debug)]
@@ -33,7 +33,20 @@ impl TryFrom<config::BasicAuth> for BasicAuth {
     }
 }
 
-impl Authentication for BasicAuth {
+impl Authentication<AuthenticationBuilder> for BasicAuth {
+    fn authorize(&self, builder: AuthenticationBuilder) -> crate::KResult<AuthenticationBuilder> {
+        Ok(builder.basic(
+            self.username.to_string()?,
+            self.password
+                .as_ref()
+                .map(CachedSecretValue::to_string)
+                .transpose()?
+                .unwrap_or_default(),
+        ))
+    }
+}
+
+impl Authentication<reqwest::RequestBuilder> for BasicAuth {
     fn authorize(
         &self,
         builder: reqwest::RequestBuilder,

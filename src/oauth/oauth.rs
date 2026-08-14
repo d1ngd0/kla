@@ -14,7 +14,7 @@ use crate::{
     config::{CachedSecretValue, SecretValue},
     filecache::CacheFile,
     oauth::BrowserAuthorizer,
-    Authentication, KResult,
+    Authentication, AuthenticationBuilder, KResult,
 };
 
 use super::Authorizer;
@@ -90,10 +90,17 @@ impl TryFrom<crate::config::OAuth> for OAuth<BrowserAuthorizer> {
     }
 }
 
-impl<T: Authorizer + Sync + Send> Authentication for OAuth<T> {
+impl<T: Authorizer + Sync + Send> Authentication<RequestBuilder> for OAuth<T> {
     fn authorize(&self, builder: RequestBuilder) -> KResult<RequestBuilder> {
         let token = self.token.fetch(|| self.oauth_flow())?;
         Ok(builder.bearer_auth(token))
+    }
+}
+
+impl<T: Authorizer + Sync + Send> Authentication<AuthenticationBuilder> for OAuth<T> {
+    fn authorize(&self, builder: AuthenticationBuilder) -> KResult<AuthenticationBuilder> {
+        let token = self.token.fetch(|| self.oauth_flow())?;
+        Ok(builder.bearer(token))
     }
 }
 

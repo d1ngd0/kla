@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use crate::{
-    basic_auth::BasicAuth, bearer_token::BearerToken, config, oauth::OAuth, ropc::ROPC, KResult,
-    SigV4,
+    basic_auth::BasicAuth, bearer_token::BearerToken, config, oauth::OAuth, ropc::ROPC,
+    AuthenticationBuilder, Error, KResult, SigV4,
 };
 use reqwest::{Request, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
-pub trait Authentication: std::fmt::Debug + Send + Sync {
+pub trait Authentication<B>: std::fmt::Debug + Send + Sync {
     /// authorize allows you to help craft the request prior to having one
     /// This must be implemented, even if it just returns the requestbuilder
-    fn authorize(&self, builder: RequestBuilder) -> KResult<RequestBuilder>;
+    fn authorize(&self, builder: B) -> KResult<B>;
 
     /// sign is an optional function that takes the incoming request
     /// and returns a new request, or the same request modified. This
@@ -22,33 +22,68 @@ pub trait Authentication: std::fmt::Debug + Send + Sync {
     }
 }
 
-impl TryFrom<config::Authentication> for Arc<dyn Authentication> {
+impl TryFrom<config::Authentication> for Arc<dyn Authentication<AuthenticationBuilder>> {
+    type Error = crate::Error;
+
+    fn try_from(value: config::Authentication) -> Result<Self, Self::Error> {
+        match value {
+            config::Authentication::BasicAuth(basic) => {
+                let val: Arc<dyn crate::Authentication<AuthenticationBuilder>> =
+                    Arc::new(BasicAuth::try_from(basic)?);
+                Ok(val)
+            }
+            config::Authentication::BearerToken(token) => {
+                let val: Arc<dyn crate::Authentication<AuthenticationBuilder>> =
+                    Arc::new(BearerToken::try_from(token)?);
+                Ok(val)
+            }
+            config::Authentication::OAuth(token) => {
+                let val: Arc<dyn crate::Authentication<AuthenticationBuilder>> =
+                    Arc::new(OAuth::try_from(token)?);
+                Ok(val)
+            }
+            config::Authentication::ROPC(token) => {
+                let val: Arc<dyn crate::Authentication<AuthenticationBuilder>> =
+                    Arc::new(ROPC::try_from(token)?);
+                Ok(val)
+            }
+            _ => Err(Error::from("unsupported authentication")),
+        }
+    }
+}
+
+impl TryFrom<config::Authentication> for Arc<dyn Authentication<RequestBuilder>> {
     type Error = crate::Error;
 
     fn try_from(value: config::Authentication) -> KResult<Self> {
         match value {
             config::Authentication::SigV4(sig_v4) => {
-                let val: Arc<dyn crate::Authentication> = Arc::new(SigV4::try_from(sig_v4)?);
+                let val: Arc<dyn crate::Authentication<RequestBuilder>> =
+                    Arc::new(SigV4::try_from(sig_v4)?);
                 Ok(val)
             }
             config::Authentication::OAuth(oauth) => {
-                let val: Arc<dyn crate::Authentication> = Arc::new(OAuth::try_from(oauth)?);
+                let val: Arc<dyn crate::Authentication<RequestBuilder>> =
+                    Arc::new(OAuth::try_from(oauth)?);
                 Ok(val)
             }
             config::Authentication::BasicAuth(basic) => {
-                let val: Arc<dyn crate::Authentication> = Arc::new(BasicAuth::try_from(basic)?);
+                let val: Arc<dyn crate::Authentication<RequestBuilder>> =
+                    Arc::new(BasicAuth::try_from(basic)?);
                 Ok(val)
             }
             config::Authentication::BearerToken(bearer) => {
-                let val: Arc<dyn crate::Authentication> = Arc::new(BearerToken::try_from(bearer)?);
+                let val: Arc<dyn crate::Authentication<RequestBuilder>> =
+                    Arc::new(BearerToken::try_from(bearer)?);
                 Ok(val)
             }
             config::Authentication::ROPC(ropc) => {
-                let val: Arc<dyn crate::Authentication> = Arc::new(ROPC::try_from(ropc)?);
+                let val: Arc<dyn crate::Authentication<RequestBuilder>> =
+                    Arc::new(ROPC::try_from(ropc)?);
                 Ok(val)
             }
             config::Authentication::None => {
-                let val: Arc<dyn crate::Authentication> = Arc::new(NoopAuth {});
+                let val: Arc<dyn crate::Authentication<RequestBuilder>> = Arc::new(NoopAuth {});
                 Ok(val)
             }
         }
@@ -65,8 +100,8 @@ impl Default for NoopAuth {
     }
 }
 
-impl Authentication for NoopAuth {
-    fn authorize(&self, builder: RequestBuilder) -> KResult<RequestBuilder> {
+impl<B> Authentication<B> for NoopAuth {
+    fn authorize(&self, builder: B) -> KResult<B> {
         return Ok(builder);
     }
 }

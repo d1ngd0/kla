@@ -152,10 +152,8 @@ async fn run() -> Result<(), anyhow::Error> {
     };
     log::debug!("Config Contents: {:?}", config);
 
-    if let Some(ext_dir) = config.extension_dir.as_ref() {
-        let repo = ExtensionRepo::new(ext_dir)?;
-        repo.apply(&mut config)?;
-    }
+    let repo = ExtensionRepo::try_from(&config.extensions)?;
+    repo.apply(&mut config)?;
 
     // check the env flag, and then the default config for the correct
     // environment to use. If you ever need to get the environment
@@ -672,12 +670,8 @@ async fn run_extensions(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::
     }
 }
 
-async fn run_extension_update(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
-    let extension_dir = conf
-        .extension_dir
-        .as_ref()
-        .ok_or(anyhow!("No extension directory specified!"))?;
-    let repo = ExtensionRepo::new(extension_dir)?;
+async fn run_extension_update(_args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    let repo = ExtensionRepo::try_from(&conf.extensions)?;
 
     for extension in repo.extensions()?.iter() {
         match repo.update(extension, &mut stdout()).await {
@@ -690,11 +684,7 @@ async fn run_extension_update(args: &ArgMatches, conf: &Config) -> Result<(), an
 }
 
 fn run_extension_list(_args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
-    let extension_dir = conf
-        .extension_dir
-        .as_ref()
-        .ok_or(anyhow!("No extension directory specified!"))?;
-    let repo = ExtensionRepo::new(extension_dir)?;
+    let repo = ExtensionRepo::try_from(&conf.extensions)?;
 
     for extension in repo.extensions()?.iter() {
         println!("{}", extension.remote);
@@ -706,11 +696,7 @@ fn run_extension_list(_args: &ArgMatches, conf: &Config) -> Result<(), anyhow::E
 fn run_extension_remove(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     let image = Reference::try_from(args.get_one::<String>("image").unwrap().as_str())
         .context("parsing image path")?;
-    let extension_dir = conf
-        .extension_dir
-        .as_ref()
-        .ok_or(anyhow!("No extension directory specified!"))?;
-    let extensions = ExtensionRepo::new(extension_dir)?;
+    let extensions = ExtensionRepo::try_from(&conf.extensions)?;
     extensions.remove(&image)?;
     Ok(())
 }
@@ -718,11 +704,7 @@ fn run_extension_remove(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::
 async fn run_extension_add(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     let image = Reference::try_from(args.get_one::<String>("image").unwrap().as_str())
         .context("parsing image path")?;
-    let extension_dir = conf
-        .extension_dir
-        .as_ref()
-        .ok_or(anyhow!("No extension directory specified!"))?;
-    let extensions = ExtensionRepo::new(extension_dir)?;
+    let extensions = ExtensionRepo::try_from(&conf.extensions)?;
     extensions.add(&image, &mut stdout()).await?;
 
     Ok(())

@@ -4,7 +4,10 @@ use oci_client::{client::ClientConfig, secrets::RegistryAuth, Client, Reference}
 use semver::Version;
 use tar::Archive;
 
-use crate::{config::Config, Context as _, Error, ExtensionSet, KResult, EXTENSION_ROOT};
+use crate::{
+    config::{self, Config},
+    AuthenticationBuilderRepo, Context as _, Error, ExtensionSet, KResult, EXTENSION_ROOT,
+};
 use std::{
     fs::{self},
     hash::{DefaultHasher, Hash, Hasher as _},
@@ -16,11 +19,28 @@ use super::Extension;
 
 pub struct ExtensionRepo {
     dir: PathBuf,
+    auth: AuthenticationBuilderRepo,
+}
+
+impl TryFrom<&config::Extensions> for ExtensionRepo {
+    type Error = Error;
+
+    fn try_from(value: &config::Extensions) -> Result<Self, Self::Error> {
+        let dir = value
+            .dir
+            .as_ref()
+            .ok_or(Error::from("No extension directory specified!"))?;
+
+        // TODO: remove this clone
+        let auth = AuthenticationBuilderRepo::try_from(value.registries.clone())?;
+
+        ExtensionRepo::new(dir, auth)
+    }
 }
 
 impl ExtensionRepo {
     /// new creates a new repo extension from the following directory
-    pub fn new<P: AsRef<Path>>(dir: P) -> KResult<Self> {
+    pub fn new<P: AsRef<Path>>(dir: P, auth: AuthenticationBuilderRepo) -> KResult<Self> {
         // make sure the directory exists, and return it
         if !dir.as_ref().exists() {
             fs::create_dir_all(dir.as_ref()).with_context(|| {
@@ -33,6 +53,7 @@ impl ExtensionRepo {
 
         Ok(Self {
             dir: PathBuf::from(dir.as_ref()),
+            auth: auth,
         })
     }
 
@@ -43,8 +64,9 @@ impl ExtensionRepo {
 
     /// oci_client_auth returns an opinionated authentication mechanism that caller should
     /// use
-    fn oci_client_auth(&self) -> KResult<RegistryAuth> {
-        Ok(RegistryAuth::Anonymous)
+    fn oci_client_auth(&self, refr: &Reference) -> KResult<RegistryAuth> {
+        let auth = self.auth.fetch(refr)?;
+        Ok(auth)
     }
 
     /// extensions returns the current extensions from the extensions file
@@ -122,7 +144,7 @@ impl ExtensionRepo {
             .ok_or(Error::from("no version defined"))
             .and_then(|f| Version::parse(f).map_err(Error::from))
             .with_context(|| format!("currently installed: {}", image))?;
-        let auth = self.oci_client_auth()?;
+        let auth = self.oci_client_auth(image)?;
         let tags = self
             .oci_client()?
             .list_tags(image, &auth, None, None)
@@ -170,7 +192,7 @@ impl ExtensionRepo {
             .oci_client()?
             .pull(
                 &image,
-                &self.oci_client_auth()?,
+                &self.oci_client_auth(image)?,
                 vec!["application/vnd.oci.image.layer.v1.tar+gzip"],
             )
             .await?

@@ -7,7 +7,7 @@ use std::fs::DirEntry;
 use std::path::{absolute, PathBuf};
 use std::{fs, path::Path};
 
-use super::{Attributes, Endpoint, SubConfig};
+use super::{Attributes, Endpoint, Extensions, SubConfig};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
@@ -20,19 +20,14 @@ pub struct Config {
     #[serde(rename = "config", default)]
     pub sub_configs: Vec<SubConfig>,
 
-    #[serde(rename = "extension_dir", default = "extension_dir")]
-    pub extension_dir: Option<PathBuf>,
+    #[serde(rename = "extensions", default)]
+    pub extensions: Extensions,
 
     #[serde(rename = "environment", default)]
     pub environment: Vec<Endpoint>,
 
     #[serde(rename = "collection")]
     pub collection_dir: Option<PathBuf>,
-}
-
-fn extension_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("com", "kla", "kla")
-        .map(|dir| PathBuf::from(dir.config_dir()).join(".extensions"))
 }
 
 impl EnvironmentLoader<Specified> for &Config {
@@ -113,14 +108,7 @@ impl Config {
             }
         });
 
-        self.extension_dir = self.extension_dir.take().map(|f| {
-            if f.is_relative() {
-                PathBuf::from(dir).join(f)
-            } else {
-                f
-            }
-        });
-
+        self.extensions.resolve_working_dir(dir);
         self.default_client.resolve_working_dir(dir);
     }
 

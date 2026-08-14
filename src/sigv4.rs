@@ -104,7 +104,7 @@ pub struct SigV4 {
     credentials: Option<Credentials>,
 }
 
-impl Authentication for SigV4 {
+impl Authentication<reqwest::RequestBuilder> for SigV4 {
     fn authorize(
         &self,
         builder: reqwest::RequestBuilder,

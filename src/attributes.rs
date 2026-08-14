@@ -19,7 +19,7 @@ pub struct Attributes {
     accept_invalid_hostnames: bool,
     redirect_policy: Arc<redirect::Policy>,
     proxy: Option<Proxy>,
-    pub auth: Arc<dyn Authentication>,
+    pub auth: Arc<dyn Authentication<RequestBuilder>>,
     verbose: bool,
 }
 
@@ -129,7 +129,7 @@ impl TryFrom<config::Attributes> for Attributes {
             auth: value
                 .auth
                 .map(|auth| {
-                    let auth: KResult<Arc<dyn Authentication>> = auth.try_into();
+                    let auth: KResult<Arc<dyn Authentication<RequestBuilder>>> = auth.try_into();
                     auth
                 })
                 .transpose()?

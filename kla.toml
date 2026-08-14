@@ -34,4 +34,9 @@ default_environment = ".env"
 type = "dir"
 path = "conf.d/"
 
-extension_dir = ".extensions/"
+[extensions]
+  dir = ".extensions/"
+
+  [[extensions.registries]]
+    prefix = "docker.paulmontag.info/"
+    authentication = { type = "basic", username = "paul", password = { prompt = "docker.paulmontag.info registry password: " } }

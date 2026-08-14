@@ -1,6 +1,6 @@
 use crate::{
     config::{self, CachedSecretValue},
-    Authentication,
+    Authentication, AuthenticationBuilder,
 };
 
 #[derive(Clone, Debug)]
@@ -27,11 +27,17 @@ impl TryFrom<config::BearerToken> for BearerToken {
     }
 }
 
-impl Authentication for BearerToken {
+impl Authentication<reqwest::RequestBuilder> for BearerToken {
     fn authorize(
         &self,
         builder: reqwest::RequestBuilder,
     ) -> crate::KResult<reqwest::RequestBuilder> {
         Ok(builder.bearer_auth(self.token.to_string()?))
+    }
+}
+
+impl Authentication<AuthenticationBuilder> for BearerToken {
+    fn authorize(&self, builder: AuthenticationBuilder) -> crate::KResult<AuthenticationBuilder> {
+        Ok(builder.bearer(self.token.to_string()?))
     }
 }
