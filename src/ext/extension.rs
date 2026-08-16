@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     ops::{Deref, DerefMut},
     path::PathBuf,
 };
@@ -48,6 +49,25 @@ pub struct Extension {
 
     // where we originally pulled this value from
     pub remote: Reference,
+
+    /// lock will stop the extension from updating any further
+    #[serde(default)]
+    pub lock: bool,
+}
+
+impl Display for Extension {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.lock {
+            write!(
+                f,
+                "{} LOCKED @<{}>",
+                self.remote,
+                self.dir.to_string_lossy()
+            )
+        } else {
+            write!(f, "{} @<{}>", self.remote, self.dir.to_string_lossy())
+        }
+    }
 }
 
 impl AsRef<Reference> for Extension {

@@ -29,18 +29,26 @@ impl AuthenticationBuilder {
     }
 }
 
-pub struct AuthenticationBuilderRepo(
-    HashMap<String, Arc<dyn Authentication<AuthenticationBuilder>>>,
-);
+pub struct AuthenticationBuilderRepo(HashMap<String, config::Authentication>);
+type DynAuthenticationBuilder = Arc<dyn Authentication<AuthenticationBuilder>>;
 
 impl AuthenticationBuilderRepo {
+    // TODO: Right now we clone the config value here. Instead we should cache
+    // the value in memory so if we request it again we already have it. We
+    // can remove the value from the config hashmap once we have an authetication
+    // built for it.
     pub fn fetch(&self, refr: &Reference) -> KResult<RegistryAuth> {
         let refr_string = refr.to_string();
 
         for (key, val) in self.iter() {
             if refr_string.starts_with(key) {
                 let b = AuthenticationBuilder::new();
-                return Ok(val.authorize(b)?.build());
+                // TODO: the clone in question is here. Val is a config::Authentication
+                // which we defer to try_from until now so we don't prompt users for
+                // config secrets until they actually use it
+                return Ok(DynAuthenticationBuilder::try_from(val.clone())?
+                    .authorize(b)?
+                    .build());
             }
         }
 
@@ -49,7 +57,7 @@ impl AuthenticationBuilderRepo {
 }
 
 impl Deref for AuthenticationBuilderRepo {
-    type Target = HashMap<String, Arc<dyn Authentication<AuthenticationBuilder>>>;
+    type Target = HashMap<String, config::Authentication>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -60,13 +68,9 @@ impl TryFrom<Vec<config::Registry>> for AuthenticationBuilderRepo {
     type Error = crate::Error;
 
     fn try_from(regs: Vec<config::Registry>) -> Result<Self, Self::Error> {
-        let mut registries: HashMap<String, Arc<dyn Authentication<AuthenticationBuilder>>> =
-            HashMap::new();
+        let mut registries: HashMap<String, config::Authentication> = HashMap::new();
         for reg in regs {
-            registries.insert(
-                reg.registry,
-                reg.authentication.unwrap_or_default().try_into()?,
-            );
+            registries.insert(reg.registry, reg.authentication.unwrap_or_default());
         }
 
         Ok(AuthenticationBuilderRepo(registries))

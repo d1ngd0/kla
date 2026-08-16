@@ -33,7 +33,6 @@ impl TryFrom<&config::Extensions> for ExtensionRepo {
 
         // TODO: remove this clone
         let auth = AuthenticationBuilderRepo::try_from(value.registries.clone())?;
-
         ExtensionRepo::new(dir, auth)
     }
 }
@@ -116,6 +115,7 @@ impl ExtensionRepo {
         })?)
     }
 
+    /// remove removes an extension from kla
     pub fn remove(&self, image: &Reference) -> KResult<()> {
         let mut extensions = self.extensions()?;
         let removed = if let Some(index) = extensions.iter().position(|f| f == image) {
@@ -132,6 +132,8 @@ impl ExtensionRepo {
         Ok(())
     }
 
+    /// update reaches out to the registry of each extension and grabs the latest tags and updates
+    /// to the newest version.
     pub async fn update<W: Write, R: AsRef<Reference>>(
         &self,
         image: R,
@@ -165,7 +167,7 @@ impl ExtensionRepo {
             );
 
             let _ = writeln!(stdout, "upgrading from {} -> {}", image, updated);
-            let _ = self.add(&updated, stdout).await?;
+            let _ = self.add(&updated, false, stdout).await?;
         }
 
         Ok(())
@@ -176,7 +178,12 @@ impl ExtensionRepo {
     /// is defined by the registry and repository, so docker.example.com/ceph/admin:latest
     /// would be stored in <extension_directory>/docker.example.com/ceph/admin. Calling this
     /// function with a new `tag` would effectively update the extension.
-    pub async fn add<W: Write>(&self, image: &Reference, stdout: &mut W) -> KResult<PathBuf> {
+    pub async fn add<W: Write>(
+        &self,
+        image: &Reference,
+        lock: bool,
+        stdout: &mut W,
+    ) -> KResult<PathBuf> {
         let ext_dir = self.dir.join(image.registry()).join(image.repository());
         if ext_dir.exists() {
             fs::remove_dir_all(&ext_dir).with_context(|| {
@@ -219,9 +226,31 @@ impl ExtensionRepo {
         self.commit_extension(Extension {
             dir: ext_dir.clone(),
             remote: image.clone(),
+            lock: lock,
         })?;
 
         Ok(ext_dir)
+    }
+
+    pub async fn version_lock<W: Write>(
+        &self,
+        image: &Reference,
+        enabled: bool,
+        stdout: &mut W,
+    ) -> KResult<()> {
+        let mut extensions = self.extensions()?;
+        if let Some(index) = extensions.iter().position(|f| f == image) {
+            extensions
+                .get_mut(index)
+                .filter(|v| *v == image)
+                .inspect(|v| {
+                    let _ = write!(stdout, "locking extension {}", v);
+                })
+                .map(|v| v.lock = enabled);
+            self.commit_extensions(extensions)
+        } else {
+            Err(Error::from(format!("extension {} not installed", image)))
+        }
     }
 
     pub fn apply(&self, config: &mut Config) -> KResult<()> {

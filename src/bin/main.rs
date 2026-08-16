@@ -79,12 +79,18 @@ fn command() -> Command {
                 Command::new("list")
             )
             .subcommand(
+                Command::new("lock")
+                .arg(arg!(<image> "The OCI extension path that you want to pull in"))
+                .arg(arg!(--unlock "unlock the new extension to enable updates").action(ArgAction::SetTrue))
+            )
+            .subcommand(
                 Command::new("add")
                 .arg(arg!(<image> "The OCI extension path that you want to pull in"))
+                .arg(arg!(--lock "lock the new extension to the installed version"))
             )
             .subcommand(
                 Command::new("remove")
-                .arg(arg!(<image> "The OCI extension path that you want to remove"))
+                .arg(arg!(<image> "The OCI extension path that you want to remove").action(ArgAction::SetTrue))
             )
             .subcommand(
                 Command::new("update")
@@ -666,6 +672,7 @@ async fn run_extensions(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::
         Some(("remove", m)) => run_extension_remove(m, conf),
         Some(("update", m)) => run_extension_update(m, conf).await,
         Some(("list", m)) => run_extension_list(m, conf),
+        Some(("lock", m)) => run_extension_lock(m, conf).await,
         _ => Ok(()),
     }
 }
@@ -674,6 +681,10 @@ async fn run_extension_update(_args: &ArgMatches, conf: &Config) -> Result<(), a
     let repo = ExtensionRepo::try_from(&conf.extensions)?;
 
     for extension in repo.extensions()?.iter() {
+        if extension.lock {
+            continue;
+        }
+
         match repo.update(extension, &mut stdout()).await {
             Ok(_) => println!("{} up to date", extension.remote),
             Err(err) => error!("{}: {}", extension.remote, err),
@@ -687,7 +698,7 @@ fn run_extension_list(_args: &ArgMatches, conf: &Config) -> Result<(), anyhow::E
     let repo = ExtensionRepo::try_from(&conf.extensions)?;
 
     for extension in repo.extensions()?.iter() {
-        println!("{}", extension.remote);
+        println!("{}", extension);
     }
 
     Ok(())
@@ -705,7 +716,28 @@ async fn run_extension_add(args: &ArgMatches, conf: &Config) -> Result<(), anyho
     let image = Reference::try_from(args.get_one::<String>("image").unwrap().as_str())
         .context("parsing image path")?;
     let extensions = ExtensionRepo::try_from(&conf.extensions)?;
-    extensions.add(&image, &mut stdout()).await?;
+    extensions
+        .add(
+            &image,
+            args.get_one::<bool>("lock").copied().unwrap_or_default(),
+            &mut stdout(),
+        )
+        .await?;
+
+    Ok(())
+}
+
+async fn run_extension_lock(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+    let image = Reference::try_from(args.get_one::<String>("image").unwrap().as_str())
+        .context("parsing image path")?;
+    let extensions = ExtensionRepo::try_from(&conf.extensions)?;
+    extensions
+        .version_lock(
+            &image,
+            !args.get_one::<bool>("unlock").copied().unwrap_or_default(),
+            &mut stdout(),
+        )
+        .await?;
 
     Ok(())
 }

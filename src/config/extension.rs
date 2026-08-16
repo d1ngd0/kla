@@ -12,6 +12,9 @@ pub struct Extensions {
 
     #[serde(rename = "registries", default)]
     pub registries: Vec<Registry>,
+
+    #[serde(rename = "lock", default)]
+    pub lock: bool,
 }
 
 impl Extensions {
@@ -31,6 +34,7 @@ impl Default for Extensions {
         Self {
             dir: extension_dir(),
             registries: Default::default(),
+            lock: false,
         }
     }
 }
