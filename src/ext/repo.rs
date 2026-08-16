@@ -239,18 +239,21 @@ impl ExtensionRepo {
         stdout: &mut W,
     ) -> KResult<()> {
         let mut extensions = self.extensions()?;
-        if let Some(index) = extensions.iter().position(|f| f == image) {
+        let extension = if let Some(index) = extensions.iter().position(|f| f == image) {
             extensions
                 .get_mut(index)
-                .filter(|v| *v == image)
-                .inspect(|v| {
-                    let _ = write!(stdout, "locking extension {}", v);
-                })
-                .map(|v| v.lock = enabled);
-            self.commit_extensions(extensions)
+                .context("fetching extension from list after index")?
         } else {
-            Err(Error::from(format!("extension {} not installed", image)))
-        }
+            return Err(Error::from(format!("extension {} not installed", image)));
+        };
+
+        extension.lock = enabled;
+        let extension_string = format!("{}", extension);
+
+        self.commit_extensions(extensions)
+            .with_context(|| format!("locking extension {}", extension_string))?;
+
+        Ok(write!(stdout, "{}", extension_string)?)
     }
 
     pub fn apply(&self, config: &mut Config) -> KResult<()> {

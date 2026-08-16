@@ -77,6 +77,11 @@ fn command() -> Command {
             .alias("ext")
             .subcommand(
                 Command::new("list")
+                .about("list all the extensions that are installed.")
+                .arg(arg!(--matches <regex> "Only show the extensions which match the supplied regex"))
+                .arg(arg!(--locked "Only show the extensions that are locked"))
+                .arg(arg!(--"name-only" "Only list the name, ommiting the directory of the installed extension"))
+                .arg(arg!(--"dir-only" "Only list the directory, ommiting the registry and version of the installed extension"))
             )
             .subcommand(
                 Command::new("lock")
@@ -694,11 +699,39 @@ async fn run_extension_update(_args: &ArgMatches, conf: &Config) -> Result<(), a
     Ok(())
 }
 
-fn run_extension_list(_args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
+fn run_extension_list(args: &ArgMatches, conf: &Config) -> Result<(), anyhow::Error> {
     let repo = ExtensionRepo::try_from(&conf.extensions)?;
+    let ext_match = Regex::new(
+        args.get_one::<String>("matches")
+            .map(|v| v.as_str())
+            .unwrap_or(".*"),
+    )?;
+    let locked_only = args.get_one::<bool>("locked").copied().unwrap_or_default();
 
     for extension in repo.extensions()?.iter() {
-        println!("{}", extension);
+        if !ext_match.is_match(&extension.remote.to_string()) {
+            continue;
+        }
+
+        if locked_only && !extension.lock {
+            continue;
+        }
+
+        if args
+            .get_one::<bool>("name-only")
+            .copied()
+            .unwrap_or_default()
+        {
+            println!("{}", extension.remote);
+        } else if args
+            .get_one::<bool>("dir-only")
+            .copied()
+            .unwrap_or_default()
+        {
+            println!("{}", extension.dir.to_string_lossy());
+        } else {
+            println!("{}", extension);
+        }
     }
 
     Ok(())

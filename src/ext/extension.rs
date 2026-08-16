@@ -47,12 +47,12 @@ pub struct Extension {
     // relative path to the extension we want to load
     pub dir: PathBuf,
 
-    // where we originally pulled this value from
-    pub remote: Reference,
-
     /// lock will stop the extension from updating any further
     #[serde(default)]
     pub lock: bool,
+
+    // where we originally pulled this value from
+    pub remote: Reference,
 }
 
 impl Display for Extension {
