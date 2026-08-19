@@ -751,7 +751,7 @@ async fn run_extension_add(args: &ArgMatches, conf: &Config) -> Result<(), anyho
     let extensions = ExtensionRepo::try_from(&conf.extensions)?;
     extensions
         .add(
-            &image,
+            image,
             args.get_one::<bool>("lock").copied().unwrap_or_default(),
             &mut stdout(),
         )

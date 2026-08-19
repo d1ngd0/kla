@@ -132,6 +132,20 @@ impl ExtensionRepo {
         Ok(())
     }
 
+    pub async fn latest_tag(
+        &self,
+        auth: &RegistryAuth,
+        img: &Reference,
+    ) -> KResult<Option<Version>> {
+        let tags = self.oci_client()?.list_tags(img, &auth, None, None).await?;
+
+        Ok(tags
+            .tags
+            .into_iter()
+            .filter_map(|tag| Version::parse(tag.as_str()).ok())
+            .max())
+    }
+
     /// update reaches out to the registry of each extension and grabs the latest tags and updates
     /// to the newest version.
     pub async fn update<W: Write, R: AsRef<Reference>>(
@@ -147,17 +161,10 @@ impl ExtensionRepo {
             .and_then(|f| Version::parse(f).map_err(Error::from))
             .with_context(|| format!("currently installed: {}", image))?;
         let auth = self.oci_client_auth(image)?;
-        let tags = self
-            .oci_client()?
-            .list_tags(image, &auth, None, None)
-            .await?;
-
-        let max = tags
-            .tags
-            .into_iter()
-            .filter_map(|tag| Version::parse(tag.as_str()).ok())
-            .max()
-            .ok_or_else(|| Error::from("no semantic versions available"))?;
+        let max = self
+            .latest_tag(&auth, image)
+            .await?
+            .with_context(|| format!("no semver versions for {}", &image))?;
 
         if max > current {
             let updated = Reference::with_tag(
@@ -167,7 +174,7 @@ impl ExtensionRepo {
             );
 
             let _ = writeln!(stdout, "upgrading from {} -> {}", image, updated);
-            let _ = self.add(&updated, false, stdout).await?;
+            let _ = self.add(updated, false, stdout).await?;
         }
 
         Ok(())
@@ -180,7 +187,7 @@ impl ExtensionRepo {
     /// function with a new `tag` would effectively update the extension.
     pub async fn add<W: Write>(
         &self,
-        image: &Reference,
+        image: Reference,
         lock: bool,
         stdout: &mut W,
     ) -> KResult<PathBuf> {
@@ -193,13 +200,40 @@ impl ExtensionRepo {
                 )
             })?;
         }
+        let auth = self.oci_client_auth(&image)?;
+
+        // NOTE: I feel like this is going to be annoying if this tool ever
+        // gets popular... If you are frustrated, know that I put thought into
+        // this and didn't like the conclusions I came to either.
+        //
+        // Essentially I want the following command to grab the latest version
+        // `kla ext add ghcr.io/d1ngd0/poetry-kla`. This way updating the template
+        // would allow `update` to work. But if someone wants to use `latest` they
+        // can. It isn't a good idea because `kla ext update` won't work but they
+        // should be able to.
+        //
+        // If the tag is latest we should attempt to install the latest semver
+        // tag. If no tag is supplied when defining the reference `latest` is
+        // assumed.
+        let image = if image.tag() == Some("latest") {
+            Reference::with_tag(
+                image.registry().into(),
+                image.repository().into(),
+                self.latest_tag(&auth, &image)
+                    .await?
+                    .map(|v| v.to_string())
+                    .unwrap_or("latest".into()),
+            )
+        } else {
+            image
+        };
 
         let _ = writeln!(stdout, "Pulling {}", image);
         let layers = self
             .oci_client()?
             .pull(
                 &image,
-                &self.oci_client_auth(image)?,
+                &auth,
                 vec!["application/vnd.oci.image.layer.v1.tar+gzip"],
             )
             .await?
