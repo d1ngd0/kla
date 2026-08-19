@@ -95,7 +95,7 @@ fn command() -> Command {
             )
             .subcommand(
                 Command::new("remove")
-                .arg(arg!(<image> "The OCI extension path that you want to remove").action(ArgAction::SetTrue))
+                .arg(arg!(<image> "The OCI extension path that you want to remove"))
             )
             .subcommand(
                 Command::new("update")
