@@ -318,6 +318,9 @@ pub struct ConfigArg {
     password: bool,
     #[serde(rename = "file_value", default)]
     file_value: bool,
+    /// editor will open your editor to fill in the value
+    #[serde(rename = "editor", default)]
+    editor: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

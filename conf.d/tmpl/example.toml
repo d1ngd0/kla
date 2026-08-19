@@ -10,6 +10,9 @@ This was your argument: {{ argument }}
 uri = "/"
 
 [[arg]]
+name = "testeditor"
+
+[[arg]]
 name = "argument"
 short = 'a'
 short_aliases = ['b', 'c']

@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{Error, KResult};
+use crate::{clap::edit_value, Error, KResult};
 use inquire::{Password, PasswordDisplayMode};
 use serde::{Deserialize, Serialize};
 
@@ -24,6 +24,9 @@ pub enum SecretValue {
     Env {
         env: String,
         default: Option<String>,
+    },
+    Editor {
+        placeholder: String,
     },
 }
 
@@ -70,6 +73,11 @@ impl SecretValue {
                 .ok()
                 .or(default)
                 .ok_or_else(|| Error::from(format!("{} is not set", &env)))?),
+            SecretValue::Editor { placeholder } => {
+                Ok(futures::executor::block_on(edit_value::<String, String>(
+                    placeholder,
+                ))?)
+            }
         }
     }
 }
