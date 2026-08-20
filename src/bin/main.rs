@@ -580,15 +580,12 @@ async fn run_root(
     // environment name, and not a url. When specifying --env this value gets
     // ignored
     debug!("specified uri {:?}", uri);
-    let (env, uri) = match uri.get(0..1) {
-        Some("/") => (None, uri.clone()),
-        Some(_) => {
-            let mut parts = uri.splitn(2, "/");
-            (
-                parts.next().map(String::from),
-                parts.next().map(String::from).unwrap_or(String::from("/")),
-            )
-        }
+    let mut uri_iter = uri.splitn(2, "/");
+    let (env, uri) = match uri_iter.next() {
+        Some("") => (None, uri_iter.next().unwrap_or("/").to_string()),
+        Some("http:") => (None, uri.clone()),
+        Some("https:") => (None, uri.clone()),
+        Some(env) => (Some(env), uri_iter.next().unwrap_or("/").to_string()),
         None => (None, uri.clone()),
     };
     debug!("extracted environment: {:?}", env);
