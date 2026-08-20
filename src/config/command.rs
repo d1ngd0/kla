@@ -7,10 +7,11 @@ use std::{
 use anyhow::Context as _;
 use clap::{command, Arg, ArgAction, ArgMatches, Command};
 use inquire::Password;
+use parse_datetime::{parse_datetime, ParsedDateTime};
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
-use crate::{clap::arg_file_value, config::Attributes, Error, Ok, Opt, RenderGroup};
+use crate::{clap::arg_file_value, config::Attributes, Error, KResult, Ok, Opt, RenderGroup};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
@@ -224,7 +225,7 @@ impl TryFrom<ConfigCommand> for Command {
     }
 }
 
-#[derive(Deserialize, Copy, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub enum ConfigArgType {
     #[serde(rename = "string")]
     String,
@@ -232,6 +233,14 @@ pub enum ConfigArgType {
     Number,
     #[serde(rename = "bool")]
     Bool,
+    #[serde(rename = "datetime")]
+    Datetime(String),
+}
+
+impl AsRef<Self> for ConfigArgType {
+    fn as_ref(&self) -> &Self {
+        self
+    }
 }
 
 impl Default for ConfigArgType {
@@ -365,7 +374,7 @@ impl ConfigArgCollection {
 
         let mut ctx = Context::new();
         for arg in self.iter() {
-            match arg.arg_type {
+            match arg.arg_type.as_ref() {
                 // Many Valued String
                 ConfigArgType::String if arg.many_valued => {
                     get_many!(args, String, &arg.name)
@@ -434,6 +443,46 @@ impl ConfigArgCollection {
                 ConfigArgType::Bool => get_one!(args, bool, &arg.name)
                     .iter()
                     .for_each(|v| ctx.insert(&arg.name, v)),
+                ConfigArgType::Datetime(format) if arg.many_valued => {
+                    let dates = get_many!(args, String, &arg.name)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|f| parse_datetime(f).map_err(Error::invalid_arguments))
+                        .map(|date| {
+                            date.map(|date| match date {
+                                ParsedDateTime::InRange(zoned) => Ok(zoned),
+                                ParsedDateTime::Extended(extended_date_time) => {
+                                    Err(Error::invalid_arguments(format!(
+                                        "date {} is out of range",
+                                        extended_date_time
+                                    )))
+                                }
+                            })
+                        })
+                        .map(|v| v.flatten())
+                        .map(|f| f.map(|f| f.strftime(&format).to_string()))
+                        .collect::<KResult<Vec<String>>>()?;
+                    dates.iter().for_each(|v| ctx.insert(&arg.name, &v));
+                }
+                ConfigArgType::Datetime(format) => {
+                    get_one!(args, String, &arg.name)
+                        .map(|f| parse_datetime(f))
+                        .transpose()
+                        .map_err(Error::invalid_arguments)?
+                        .map(|date| match date {
+                            ParsedDateTime::InRange(zoned) => Ok(zoned),
+                            ParsedDateTime::Extended(extended_date_time) => {
+                                Err(Error::invalid_arguments(format!(
+                                    "date {} is out of range",
+                                    extended_date_time
+                                )))
+                            }
+                        })
+                        .transpose()?
+                        .map(|f| f.strftime(&format).to_string())
+                        .iter()
+                        .for_each(|v| ctx.insert(&arg.name, &v));
+                }
             }
         }
 

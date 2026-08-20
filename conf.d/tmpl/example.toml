@@ -6,6 +6,7 @@ description = """
 """
 body = """
 This was your argument: {{ argument }}
+This was your datetime: {{ datetime }}
 """
 uri = "/"
 
@@ -26,3 +27,7 @@ next_line_help = true
 required = true
 default_value = "argument value"
 env = "KLA_ARG_VAL"
+
+[[arg]]
+name = "datetime"
+type = { datetime = "%F %T" }

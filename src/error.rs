@@ -1,5 +1,4 @@
 use std::convert::{From, Infallible};
-use std::error::Error as StdError;
 use std::fmt::Display;
 
 use inquire::InquireError;
@@ -10,8 +9,6 @@ use crate::sigv4::SigningError;
 
 pub type KResult<T> = std::result::Result<T, Error>;
 
-pub(crate) type BoxError = Box<dyn StdError + Send + Sync>;
-
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Error Parsing Data: {0}")]
@@ -21,7 +18,7 @@ pub enum Error {
     #[error("Templating Error: {0}")]
     TemplateError(#[from] tera::Error),
     #[error("Invalid arguments: {0}")]
-    InvalidArguments(BoxError),
+    InvalidArguments(String),
     #[error("io Error: {0}")]
     IOError(#[from] std::io::Error),
     #[error("Body not UTF-8: {0}")]
@@ -74,37 +71,43 @@ impl From<String> for Error {
 
 impl From<regex::Error> for Error {
     fn from(err: regex::Error) -> Self {
-        Error::InvalidArguments(Box::new(err))
+        Error::invalid_arguments(err)
     }
 }
 
 impl From<url::ParseError> for Error {
     fn from(err: url::ParseError) -> Self {
-        Error::InvalidArguments(Box::new(err))
+        Error::invalid_arguments(err)
     }
 }
 
 impl From<http::method::InvalidMethod> for Error {
     fn from(err: http::method::InvalidMethod) -> Self {
-        Error::InvalidArguments(Box::new(err))
+        Error::invalid_arguments(err)
     }
 }
 
 impl From<reqwest::header::ToStrError> for Error {
     fn from(err: reqwest::header::ToStrError) -> Self {
-        Error::InvalidArguments(Box::new(err))
+        Error::invalid_arguments(err)
     }
 }
 
 impl From<reqwest::header::InvalidHeaderValue> for Error {
     fn from(err: reqwest::header::InvalidHeaderValue) -> Self {
-        Error::InvalidArguments(Box::new(err))
+        Error::invalid_arguments(err)
     }
 }
 
 impl From<reqwest::header::InvalidHeaderName> for Error {
     fn from(err: reqwest::header::InvalidHeaderName) -> Self {
-        Error::InvalidArguments(Box::new(err))
+        Error::invalid_arguments(err)
+    }
+}
+
+impl Error {
+    pub fn invalid_arguments<D: Display>(d: D) -> Error {
+        Error::InvalidArguments(format!("{}", d))
     }
 }
 

@@ -97,7 +97,6 @@ kla run doc 233 --delete --force
 
 Hold up though! Melisa from the docs department API department just let you know you can specify a `format` as a query param where you can select `json` or `yaml`. You remind Melisa that there is an HTTP header better suited for that, but she rolls her eyes at you; Typical Melisa! We could use templating in the uri, something like `uri = "/api/v1/doc/{{ id }}?format={{ format }}"` but Melisa has informed you they haven't landed on the final format yet so you want your template to utilize the APIs default value instead of hardcoding your own.
 
-
 ```toml
   ...
 
@@ -156,6 +155,7 @@ A Very long description, though this one isn't
   # - string (default when not present)
   # - number
   # - bool
+  # - datetime
   type = "string"
 
   # Boolean specifying if this is a list of arguments, or a single argument. If true the same flag can be sent multiple times, and the resulting value passed into the body would be an array of values
@@ -407,7 +407,144 @@ Each template allows for subcommands, these commands are stored in a subdirector
 ├ config.toml
 └ config.subcmd
   ├ set.toml
-  └ get.toml 
+  └ get.toml
 ```
 
 The `config.toml` is the parent command, which will load in all the subcommands from `config.subcmd`. Subcommands are nesting, meaning each subcommand can have subcommands of it's own.
+
+## Argument Types
+
+### String
+
+The default type when not specified.
+
+**Supports Multi Valued**
+**Supports Password**
+
+_example_
+
+```toml
+[[arg]]
+name = "name"
+# type does not need to be specified as it is the default
+```
+
+### Number
+
+**Supports Multi Valued**
+
+_example_
+
+```toml
+[[arg]]
+name = "age"
+type = "number"
+```
+
+### Boolean
+
+**Supports Multi Valued**
+
+_example_
+
+```toml
+[[arg]]
+name = "active"
+type = "bool"
+```
+
+### Datetime
+
+**Supports Multi Valued**
+
+Enables "Natural Language" timestamps which are then converted into the specified format. The input for the argument supports the following formats:
+
+- num unit (e.g., "-1 hour", "+3 days")
+- unit (e.g., "hour", "day")
+- "now" or "today"
+- "yesterday"
+- "tomorrow"
+- use "ago" for the past
+- use "next" or "last" with unit (e.g., "next week", "last year")
+- unix timestamps (for example "@0" "@1344000")
+
+num can be a positive or negative integer. unit can be one of the following: "fortnight", "week", "day", "hour", "minute", "min", "second", "sec" and their plural forms.
+
+_example_
+
+```toml
+[[arg]]
+name = "start"
+type = { datetime = "%F %T" }
+```
+
+The format string uses a “printf”-style API where conversion specifiers can be used as place holders to format components of a datetime.
+
+This table lists the complete set of conversion specifiers supported in the format. While most conversion specifiers are supported as is in both parsing and formatting, there are some differences. Where differences occur, they are noted in the table below.
+
+When parsing, and whenever a conversion specifier matches an enumeration of strings, the strings are matched without regard to ASCII case.
+
+| Specifier  | Example                   | Description                                                                   |
+| ---------- | ------------------------- | ----------------------------------------------------------------------------- |
+| %%         | %%                        | A literal %.                                                                  |
+| %A, %a     | Sunday, Sun               | The full and abbreviated weekday, respectively.                               |
+| %B, %b, %h | June, Jun, Jun            | The full and abbreviated month name, respectively.                            |
+| %C         | 20                        | The century of the year. No padding.                                          |
+| %c         | 2024 M07 14, Sun 17:31:59 | The date and clock time via Custom. Supported when formatting only.           |
+| %D         | 7/14/24                   | Equivalent to %m/%d/%y.                                                       |
+| %d, %e     | 25, 5                     | The day of the month. %d is zero-padded, %e is space padded.                  |
+| %F         | 2024-07-14                | Equivalent to %Y-%m-%d.                                                       |
+| %f         | 000456                    | Fractional seconds, up to nanosecond precision.                               |
+| %.f        | .000456                   | Optional fractional seconds, with dot, up to nanosecond precision.            |
+| %G         | 2024                      | An ISO 8601 week-based year. Zero padded to 4 digits.                         |
+| %g         | 24                        | A two-digit ISO 8601 week-based year. Represents only 1969-2068. Zero padded. |
+| %H         | 23                        | The hour in a 24 hour clock. Zero padded.                                     |
+| %I         | 11                        | The hour in a 12 hour clock. Zero padded.                                     |
+| %j         | 060                       | The day of the year. Range is 1..=366. Zero padded to 3 digits.               |
+| %k         | 15                        | The hour in a 24 hour clock. Space padded.                                    |
+| %l         | 3                         | The hour in a 12 hour clock. Space padded.                                    |
+| %M         | 04                        | The minute. Zero padded.                                                      |
+| %m         | 01                        | The month. Zero padded.                                                       |
+| %N         | 123456000                 | Fractional seconds, up to nanosecond precision. Alias for %9f.                |
+| %n         | \n                        | Formats as a newline character. Parses arbitrary whitespace.                  |
+| %P         | am                        | Whether the time is in the AM or PM, lowercase.                               |
+| %p         | PM                        | Whether the time is in the AM or PM, uppercase.                               |
+| %Q         | America/New_York, +0530   | An IANA time zone identifier, or %z if one doesn’t exist.                     |
+| %:Q        | America/New_York, +05:30  | An IANA time zone identifier, or %:z if one doesn’t exist.                    |
+| %q         | 4                         | The quarter of the year. Supported when formatting only.                      |
+| %R         | 23:30                     | Equivalent to %H:%M.                                                          |
+| %r         | 8:30:00 AM                | The 12-hour clock time via Custom. Supported when formatting only.            |
+| %S         | 59                        | The second. Zero padded.                                                      |
+| %s         | 1737396540                | A Unix timestamp, in seconds.                                                 |
+| %T         | 23:30:59                  | Equivalent to %H:%M:%S.                                                       |
+| %t         | \t                        | Formats as a tab character. Parses arbitrary whitespace.                      |
+| %U         | 03                        | Week number. Week 1 is the first week starting with a Sunday. Zero padded.    |
+| %u         | 7                         | The day of the week beginning with Monday at 1.                               |
+| %V         | 05                        | Week number in the ISO 8601 week-based calendar. Zero padded.                 |
+| %W         | 03                        | Week number. Week 1 is the first week starting with a Monday. Zero padded.    |
+| %w         | 0                         | The day of the week beginning with Sunday at 0.                               |
+| %X         | 17:31:59                  | The clock time via Custom. Supported when formatting only.                    |
+| %x         | 2024 M07 14               | The date via Custom. Supported when formatting only.                          |
+| %Y         | 2024                      | A full year, including century. Zero padded to 4 digits.                      |
+| %y         | 24                        | A two-digit year. Represents only 1969-2068. Zero padded.                     |
+| %Z         | EDT                       | A time zone abbreviation. Supported when formatting only.                     |
+| %z         | +0530                     | A time zone offset in the format [+-]HHMM[SS].                                |
+| %:z        | +05:30                    | A time zone offset in the format [+-]HH:MM[:SS].                              |
+| %::z       | +05:30:00                 | A time zone offset in the format [+-]HH:MM:SS.                                |
+| %:::z      | -04, +05:30               | A time zone offset in the format [+-]HH:[MM[:SS]].                            |
+
+When formatting, the following flags can be inserted immediately after the % and before the directive:
+
+    _ - Pad a numeric result to the left with spaces.
+    - - Do not pad a numeric result.
+    0 - Pad a numeric result to the left with zeros.
+    ^ - Use alphabetic uppercase for all relevant strings.
+    # - Swap the case of the result string. This is typically only useful with %p or %Z, since they are the only conversion specifiers that emit strings entirely in uppercase by default.
+
+The above flags override the “default” settings of a specifier. For example, %_d pads with spaces instead of zeros, and %0e pads with zeros instead of spaces. The exceptions are the locale (%c, %r, %X, %x), and time zone (%z, %:z) specifiers. They are unaffected by any flags.
+
+Moreover, any number of decimal digits can be inserted after the (possibly absent) flag and before the directive, so long as the parsed number is less than 256. The number formed by these digits will correspond to the minimum amount of padding (to the left). Note that padding is clamped to a maximum of 20.
+
+The flags and padding amount above may be used when parsing as well. Most settings are ignored during parsing except for padding. For example, if one wanted to parse 003 as the day 3, then one should use %03d. Otherwise, by default, %d will only try to consume at most 2 digits.
+
+The %f and %.f flags also support specifying the precision, up to nanoseconds. For example, %3f and %.3f will both always print a fractional second component to exactly 3 decimal places. When no precision is specified, then %f will always emit at least one digit, even if it’s zero. But %.f will emit the empty string when the fractional component is zero. Otherwise, it will include the leading .. For parsing, %f does not include the leading dot, but %.f does. Note that all of the options above are still parsed for %f and %.f, but they are all no-ops (except for the padding for %f, which is instead interpreted as a precision setting). When using a precision setting, truncation is used.
