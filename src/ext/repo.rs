@@ -116,7 +116,7 @@ impl ExtensionRepo {
     }
 
     /// remove removes an extension from kla
-    pub fn remove(&self, image: &Reference) -> KResult<()> {
+    pub fn remove<W: Write>(&self, image: &Reference, stdout: &mut W) -> KResult<()> {
         let mut extensions = self.extensions()?;
         let removed = if let Some(index) = extensions.iter().position(|f| f == image) {
             extensions.remove(index)
@@ -125,8 +125,14 @@ impl ExtensionRepo {
         };
 
         // remove the extension
+        write!(stdout, "removing {}", removed.remote)?;
         self.commit_extensions(extensions)?;
         // clean up the templates
+        write!(
+            stdout,
+            "removing directory {}",
+            removed.dir.to_string_lossy()
+        )?;
         fs::remove_dir_all(removed.dir)?;
 
         Ok(())
@@ -174,7 +180,7 @@ impl ExtensionRepo {
             );
 
             let _ = writeln!(stdout, "upgrading from {} -> {}", image, updated);
-            let _ = self.add(updated, false, stdout).await?;
+            let _ = self.add(&updated, false, stdout).await?;
         }
 
         Ok(())
@@ -187,7 +193,7 @@ impl ExtensionRepo {
     /// function with a new `tag` would effectively update the extension.
     pub async fn add<W: Write>(
         &self,
-        image: Reference,
+        image: &Reference,
         lock: bool,
         stdout: &mut W,
     ) -> KResult<PathBuf> {
@@ -225,7 +231,8 @@ impl ExtensionRepo {
                     .unwrap_or("latest".into()),
             )
         } else {
-            image
+            // Sorry, but this can also be slow I don't care
+            image.clone()
         };
 
         let _ = writeln!(stdout, "Pulling {}", image);
@@ -280,6 +287,19 @@ impl ExtensionRepo {
         } else {
             return Err(Error::from(format!("extension {} not installed", image)));
         };
+
+        // If the user is suggesting to lock a version of the extension that isn't
+        // currently installed then lets do that for them.
+        if image.tag() != Some("latest") && extension.remote.tag() != image.tag() {
+            write!(
+                stdout,
+                "Installing {} as it isn't the current version",
+                image.tag().unwrap_or_default()
+            )?;
+
+            self.add(image, true, stdout).await?;
+            return Ok(());
+        }
 
         extension.lock = enabled;
         let extension_string = format!("{}", extension);
