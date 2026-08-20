@@ -33,3 +33,12 @@ savepoint:
         exit 1
     fi
     savepoint --clear --filetype rs just test
+
+release-bug:
+    gh release create $(gh release list --json tagName | jq '.[].tagName' -r | sort --version-sort -r | head -n 1 | awk ' BEGIN { FS="." } ; { print $1 "." $2 "." $3+1}')
+
+release-minor:
+    gh release create $(gh release list --json tagName | jq '.[].tagName' -r | sort --version-sort -r | head -n 1 | awk ' BEGIN { FS="." } ; { print $1 "." $2+1 ".0"}')
+
+release-major:
+    gh release create $(gh release list --json tagName | jq '.[].tagName' -r | sort --version-sort -r | head -n 1 | awk ' BEGIN { FS="." } ; { print $1+1 ".0.0"}')
