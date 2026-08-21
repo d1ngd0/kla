@@ -55,6 +55,8 @@ pub enum Error {
     OCIError(#[from] oci_client::errors::OciDistributionError),
     #[error("{0}")]
     SemVerError(#[from] semver::Error),
+    #[error("{0}")]
+    UTF8Error(#[from] std::string::FromUtf8Error),
 }
 
 impl From<&str> for Error {

@@ -8,4 +8,4 @@ uri = "/author{% if author is not defined %}s{% else %}/{{ author }}{% endif %}"
   name = "author"
   long = "name"
   help = "The author you want to look into"
-  default_missing_value = { text = "Author: " }
+  default_missing_value = { select = "Author: ", items = { command = "/bin/bash", args = ["-c", "kla run author | jq '.authors[]' -r"] }}

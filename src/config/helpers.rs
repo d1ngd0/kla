@@ -2,10 +2,11 @@ use std::{
     env,
     fs::read_to_string,
     path::{Path, PathBuf},
+    process::Command,
     sync::{Arc, Mutex},
 };
 
-use crate::{clap::edit_value, Error, KResult};
+use crate::{clap::edit_value, Context as _, Error, KResult};
 use clap::builder::ArgExt;
 use inquire::{Password, PasswordDisplayMode, Select, Text};
 use serde::{Deserialize, Serialize};
@@ -34,8 +35,36 @@ pub enum ValueSource {
     },
     Select {
         select: String,
-        items: Vec<String>,
+        items: SelectItems,
     },
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum SelectItems {
+    Literal(Vec<String>),
+    Command { command: String, args: Vec<String> },
+}
+
+impl TryFrom<SelectItems> for Vec<String> {
+    type Error = Error;
+
+    fn try_from(value: SelectItems) -> Result<Self, Self::Error> {
+        match value {
+            SelectItems::Literal(items) => Ok(items),
+            SelectItems::Command { command, args } => Ok(String::from_utf8(
+                Command::new(&command)
+                    .args(&args)
+                    .output()
+                    .with_context(|| format!("running command {} {:?}", &command, &args))?
+                    .stdout,
+            )
+            .with_context(|| format!("reading command output from {} {:?}", &command, &args))?
+            .lines()
+            .map(String::from)
+            .collect()),
+        }
+    }
 }
 
 impl ArgExt for ValueSource {}
@@ -87,7 +116,9 @@ impl ValueSource {
             ValueSource::Editor { editor } => {
                 futures::executor::block_on(edit_value::<String, String>(editor))?
             }
-            ValueSource::Select { select, items } => Select::new(&select, items).prompt()?,
+            ValueSource::Select { select, items } => {
+                Select::new(&select, items.try_into()?).prompt()?
+            }
         })
     }
 }
