@@ -31,3 +31,4 @@ env = "KLA_ARG_VAL"
 [[arg]]
 name = "datetime"
 type = { datetime = "%F %T" }
+prompt = "editor"

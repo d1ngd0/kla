@@ -39,4 +39,4 @@ path = "conf.d/"
 
   [[extensions.registries]]
     prefix = "docker.paulmontag.info/"
-    authentication = { type = "basic", username = "paul", password = { prompt = "docker.paulmontag.info registry password: " } }
+    authentication = { type = "basic", username = "paul", password = { password = "docker.paulmontag.info registry password: " } }

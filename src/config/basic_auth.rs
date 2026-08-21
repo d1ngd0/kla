@@ -2,12 +2,12 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::SecretValue;
+use crate::config::ValueSource;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BasicAuth {
-    pub username: SecretValue,
-    pub password: Option<SecretValue>,
+    pub username: ValueSource,
+    pub password: Option<ValueSource>,
 }
 
 impl BasicAuth {

@@ -5,7 +5,7 @@ use serde::Deserialize;
 use sha2::{Digest as _, Sha256};
 
 use crate::{
-    config::{self, CachedSecretValue},
+    config::{self, CachedValueSource},
     filecache::CacheFile,
     Authentication, AuthenticationBuilder, KResult,
 };
@@ -18,11 +18,11 @@ struct TokenResponse {
 
 #[derive(Clone, Debug)]
 pub struct ROPC {
-    client_id: CachedSecretValue,
+    client_id: CachedValueSource,
     token_url: String,
-    client_secret: CachedSecretValue,
-    username: CachedSecretValue,
-    password: CachedSecretValue,
+    client_secret: CachedValueSource,
+    username: CachedValueSource,
+    password: CachedValueSource,
     token: CacheFile,
 }
 

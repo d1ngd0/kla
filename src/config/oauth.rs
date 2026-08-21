@@ -3,15 +3,15 @@ use std::path::Path;
 use oauth2::{AuthUrl, Scope, TokenUrl};
 use serde::{Deserialize, Serialize};
 
-use crate::config::SecretValue;
+use crate::config::ValueSource;
 
 // TODO: this should be more configurable, we assume they will use the browser
 // authorizer, but there could be better ways to do this in the future, like a
 // proxy that we should support.
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct OAuth {
-    pub client_id: SecretValue,
-    pub client_secret: SecretValue,
+    pub client_id: ValueSource,
+    pub client_secret: ValueSource,
     pub authorization_url: AuthUrl,
     pub redirect_port: Option<u16>,
     #[serde(default)]
@@ -33,7 +33,7 @@ impl OAuth {
 mod test {
     use oauth2::{AuthUrl, Scope, TokenUrl};
 
-    use crate::config::SecretValue;
+    use crate::config::ValueSource;
 
     use super::OAuth;
 
@@ -53,8 +53,8 @@ mod test {
 
         let oauth_config: OAuth = serde_json::from_str(&s)?;
         let expected = OAuth {
-            client_id: SecretValue::from("testvalue"),
-            client_secret: SecretValue::from("something"),
+            client_id: ValueSource::from("testvalue"),
+            client_secret: ValueSource::from("something"),
             authorization_url: AuthUrl::new("https://localhost:9999".into())?,
             token_url: TokenUrl::new("https://localhost:9999".into())?,
             scopes: vec![Scope::new("testvalue".into())],

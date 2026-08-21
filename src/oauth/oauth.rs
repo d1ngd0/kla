@@ -11,7 +11,7 @@ use reqwest::RequestBuilder;
 use sha2::{Digest as _, Sha256};
 
 use crate::{
-    config::{CachedSecretValue, SecretValue},
+    config::{CachedValueSource, ValueSource},
     filecache::CacheFile,
     oauth::BrowserAuthorizer,
     Authentication, AuthenticationBuilder, KResult,
@@ -21,8 +21,8 @@ use super::Authorizer;
 
 #[derive(Clone)]
 pub struct OAuth<T: Authorizer> {
-    client_id: CachedSecretValue,
-    client_secret: CachedSecretValue,
+    client_id: CachedValueSource,
+    client_secret: CachedValueSource,
     authorization_url: AuthUrl,
     token_url: TokenUrl,
     redirect_url: RedirectUrl,
@@ -106,7 +106,7 @@ impl<T: Authorizer + Sync + Send> Authentication<AuthenticationBuilder> for OAut
 
 impl<T: Authorizer> OAuth<T> {
     pub fn token_filename(
-        client: &SecretValue,
+        client: &ValueSource,
         auth: &AuthUrl,
         token: &TokenUrl,
         scopes: &[Scope],
@@ -189,7 +189,7 @@ mod tests {
     use serde_json::json;
     use tokio::runtime::Runtime;
 
-    use crate::{config::CachedSecretValue, filecache::CacheFile, Authentication as _};
+    use crate::{config::CachedValueSource, filecache::CacheFile, Authentication as _};
 
     use super::OAuth;
 
@@ -253,8 +253,8 @@ mod tests {
         let api_url = server.url("/api/userinfo");
 
         let auth = OAuth {
-            client_id: CachedSecretValue::from("client_id"),
-            client_secret: CachedSecretValue::from("2io3fnaldvmaw09evmaisdhfas"),
+            client_id: CachedValueSource::from("client_id"),
+            client_secret: CachedValueSource::from("2io3fnaldvmaw09evmaisdhfas"),
             authorization_url: AuthUrl::new(auth_url.into())?,
             token_url: TokenUrl::new(token_url.into())?,
             token: CacheFile::new("./test"),

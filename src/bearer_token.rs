@@ -1,17 +1,17 @@
 use crate::{
-    config::{self, CachedSecretValue},
+    config::{self, CachedValueSource},
     Authentication, AuthenticationBuilder,
 };
 
 #[derive(Clone, Debug)]
 pub struct BearerToken {
-    token: CachedSecretValue,
+    token: CachedValueSource,
 }
 
 impl BearerToken {
     pub fn new<T>(token: T) -> BearerToken
     where
-        T: Into<CachedSecretValue>,
+        T: Into<CachedValueSource>,
     {
         BearerToken {
             token: token.into(),

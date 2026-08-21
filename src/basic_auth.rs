@@ -1,19 +1,19 @@
 use crate::{
-    config::{self, CachedSecretValue},
+    config::{self, CachedValueSource},
     Authentication, AuthenticationBuilder,
 };
 
 #[derive(Clone, Debug)]
 pub struct BasicAuth {
-    username: CachedSecretValue,
-    password: Option<CachedSecretValue>,
+    username: CachedValueSource,
+    password: Option<CachedValueSource>,
 }
 
 impl BasicAuth {
     pub fn new<U, P>(username: U, password: Option<P>) -> BasicAuth
     where
-        U: Into<CachedSecretValue>,
-        P: Into<CachedSecretValue>,
+        U: Into<CachedValueSource>,
+        P: Into<CachedValueSource>,
     {
         BasicAuth {
             username: username.into(),
@@ -39,7 +39,7 @@ impl Authentication<AuthenticationBuilder> for BasicAuth {
             self.username.to_string()?,
             self.password
                 .as_ref()
-                .map(CachedSecretValue::to_string)
+                .map(CachedValueSource::to_string)
                 .transpose()?
                 .unwrap_or_default(),
         ))
@@ -55,7 +55,7 @@ impl Authentication<reqwest::RequestBuilder> for BasicAuth {
             self.username.to_string()?,
             self.password
                 .as_ref()
-                .map(CachedSecretValue::to_string)
+                .map(CachedValueSource::to_string)
                 .transpose()?,
         ))
     }

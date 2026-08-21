@@ -6,42 +6,52 @@ use std::{
 };
 
 use crate::{clap::edit_value, Error, KResult};
-use inquire::{Password, PasswordDisplayMode};
+use clap::builder::ArgExt;
+use inquire::{Password, PasswordDisplayMode, Select, Text};
 use serde::{Deserialize, Serialize};
 
 /// FileOrValue holds a file with a value in it, or a literal value
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(untagged)]
-pub enum SecretValue {
+pub enum ValueSource {
+    Value(String),
     File {
         path: PathBuf,
         trim: Option<bool>,
     },
-    Value(String),
-    Prompt {
-        prompt: String,
+    Text {
+        text: String,
+    },
+    Password {
+        password: String,
     },
     Env {
         env: String,
         default: Option<String>,
     },
     Editor {
-        placeholder: String,
+        editor: String,
+    },
+    Select {
+        select: String,
+        items: Vec<String>,
     },
 }
 
-impl AsRef<SecretValue> for SecretValue {
-    fn as_ref(&self) -> &SecretValue {
+impl ArgExt for ValueSource {}
+
+impl AsRef<ValueSource> for ValueSource {
+    fn as_ref(&self) -> &ValueSource {
         self
     }
 }
 
-impl SecretValue {
+impl ValueSource {
     /// resolve_working_dir finds any relative paths referenced in the config
     /// and resolves them with `dir` as it's base.
     pub fn resolve_working_dir<P: AsRef<Path>>(&mut self, dir: P) {
         match self {
-            SecretValue::File { path, trim: _ } => {
+            ValueSource::File { path, trim: _ } => {
                 if path.is_relative() {
                     *path = PathBuf::from(dir.as_ref()).join(path.as_path());
                 }
@@ -50,55 +60,55 @@ impl SecretValue {
         }
     }
 
-    pub fn cached(self) -> CachedSecretValue {
-        CachedSecretValue(Arc::new(Mutex::new(Some(self))))
+    pub fn cached(self) -> CachedValueSource {
+        CachedValueSource(Arc::new(Mutex::new(Some(self))))
     }
 
     pub fn to_string(self) -> KResult<String> {
-        match self {
-            SecretValue::File { path, trim } => {
+        Ok(match self {
+            ValueSource::File { path, trim } => {
                 let s = read_to_string(path)?;
-                if trim.unwrap_or_default() {
-                    Ok(s.trim_end().to_string())
+                if trim.unwrap_or(false) {
+                    s.trim_end().to_string()
                 } else {
-                    Ok(s)
+                    s
                 }
             }
-            SecretValue::Value(value) => Ok(value),
-            SecretValue::Prompt { prompt } => Ok(Password::new(&format!("{}: ", &prompt))
+            ValueSource::Value(value) => value,
+            Self::Text { text } => Text::new(&text).prompt()?,
+            ValueSource::Password { password } => Password::new(&format!("{}: ", &password))
                 .without_confirmation()
                 .with_display_mode(PasswordDisplayMode::Masked)
-                .prompt()?),
-            SecretValue::Env { env, default } => Ok(env::var(&env)
+                .prompt()?,
+            ValueSource::Env { env, default } => env::var(&env)
                 .ok()
                 .or(default)
-                .ok_or_else(|| Error::from(format!("{} is not set", &env)))?),
-            SecretValue::Editor { placeholder } => {
-                Ok(futures::executor::block_on(edit_value::<String, String>(
-                    placeholder,
-                ))?)
+                .ok_or_else(|| Error::from(format!("{} is not set", &env)))?,
+            ValueSource::Editor { editor } => {
+                futures::executor::block_on(edit_value::<String, String>(editor))?
             }
-        }
+            ValueSource::Select { select, items } => Select::new(&select, items).prompt()?,
+        })
     }
 }
 
-impl From<String> for SecretValue {
+impl From<String> for ValueSource {
     fn from(value: String) -> Self {
         Self::Value(value)
     }
 }
 
-impl From<&str> for SecretValue {
+impl From<&str> for ValueSource {
     fn from(value: &str) -> Self {
         Self::from(value.to_string())
     }
 }
 
-impl TryFrom<SecretValue> for String {
+impl TryFrom<ValueSource> for String {
     type Error = crate::Error;
 
     /// Consume the ClientSecret and return an oauth::ClientSecret
-    fn try_from(value: SecretValue) -> KResult<Self> {
+    fn try_from(value: ValueSource) -> KResult<Self> {
         value.to_string()
     }
 }
@@ -107,48 +117,48 @@ impl TryFrom<SecretValue> for String {
 /// in memory, so it will only prompt you for the value once. You can pair this with
 /// a FileCache to reduce requests across requests.
 #[derive(Debug, Clone)]
-pub struct CachedSecretValue(Arc<Mutex<Option<SecretValue>>>);
+pub struct CachedValueSource(Arc<Mutex<Option<ValueSource>>>);
 
-impl CachedSecretValue {
-    pub fn new(sv: SecretValue) -> CachedSecretValue {
-        CachedSecretValue(Arc::new(Mutex::new(Some(sv))))
+impl CachedValueSource {
+    pub fn new(sv: ValueSource) -> CachedValueSource {
+        CachedValueSource(Arc::new(Mutex::new(Some(sv))))
     }
 }
 
-impl CachedSecretValue {
+impl CachedValueSource {
     pub fn to_string(&self) -> KResult<String> {
         let mut lock = self.0.lock().expect("poisoned lock");
         let val = lock
             .take()
             .expect("Option should always have value")
             .to_string()?;
-        lock.replace(SecretValue::Value(val.clone()));
+        lock.replace(ValueSource::Value(val.clone()));
         Ok(val)
     }
 }
 
-impl From<SecretValue> for CachedSecretValue {
-    fn from(value: SecretValue) -> Self {
-        CachedSecretValue::new(value)
+impl From<ValueSource> for CachedValueSource {
+    fn from(value: ValueSource) -> Self {
+        CachedValueSource::new(value)
     }
 }
 
-impl From<String> for CachedSecretValue {
+impl From<String> for CachedValueSource {
     fn from(value: String) -> Self {
-        CachedSecretValue::new(SecretValue::Value(value))
+        CachedValueSource::new(ValueSource::Value(value))
     }
 }
 
-impl From<&str> for CachedSecretValue {
+impl From<&str> for CachedValueSource {
     fn from(value: &str) -> Self {
-        CachedSecretValue::new(SecretValue::Value(value.into()))
+        CachedValueSource::new(ValueSource::Value(value.into()))
     }
 }
 
-impl TryFrom<&CachedSecretValue> for String {
+impl TryFrom<&CachedValueSource> for String {
     type Error = crate::Error;
 
-    fn try_from(value: &CachedSecretValue) -> KResult<Self> {
+    fn try_from(value: &CachedValueSource) -> KResult<Self> {
         value.to_string()
     }
 }

@@ -2,16 +2,16 @@ use std::{
     fs::{self, DirEntry},
     ops::Deref,
     path::{absolute, Path, PathBuf},
+    str::FromStr,
 };
 
-use anyhow::Context as _;
 use clap::{command, Arg, ArgAction, ArgMatches, Command};
-use inquire::Password;
 use parse_datetime::{parse_datetime, ParsedDateTime};
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
-use crate::{clap::arg_file_value, config::Attributes, Error, KResult, Ok, Opt, RenderGroup};
+use super::{Attributes, ValueSource};
+use crate::{clap::arg_file_value, Context as _, Error, KResult, Ok, Opt, RenderGroup};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
@@ -294,11 +294,11 @@ pub struct ConfigArg {
     #[serde(rename = "raw")]
     raw: Option<bool>,
     #[serde(rename = "default_value")]
-    default_value: Option<String>,
+    default_value: Option<ValueSource>,
     #[serde(rename = "default_values", default)]
     default_values: Option<Vec<String>>,
     #[serde(rename = "default_missing_value")]
-    default_missing_value: Option<String>,
+    default_missing_value: Option<ValueSource>,
     #[serde(rename = "default_missing_values", default)]
     default_missing_values: Option<Vec<String>>,
     #[serde(rename = "env")]
@@ -323,8 +323,6 @@ pub struct ConfigArg {
         default = "arg_action_default"
     )]
     action: Option<ArgAction>,
-    #[serde(rename = "password", default)]
-    password: bool,
     #[serde(rename = "file_value", default)]
     file_value: bool,
 }
@@ -344,31 +342,50 @@ impl ConfigArgCollection {
     // args_context returns a Tera Context object from the arguments specifified
     pub fn args_context(&self, args: &ArgMatches) -> crate::KResult<Context> {
         macro_rules! get_one {
-    ($args:expr, $ty:ty, $name:expr) => {
-        $args
-            .try_get_one::<$ty>($name)
-            .map_err(|_| {
-                crate::Error::from(format!(
-                    "argument `{}` had type of `{}` which is apparently wrong, set `type` to the correct value in your template",
-                    $name,
-                    stringify!($ty),
-                ))
-            })?
-    };
-}
+            ($args:expr, $ty:ty, $arg:expr) => {
+                    match $args
+                    .try_get_one::<$ty>(&$arg.name)
+                    .map_err(|err| Error::invalid_arguments(err))
+                    .with_context(|| format!(
+                            "argument `{}` had type of `{}` which is apparently wrong, set `type` to the correct value in your template",
+                            &$arg.name,
+                            stringify!($ty),
+                    ))? {
+                        Some(v) => Some(v.clone()),
+                        None => {
+                            if args.contains_id(&$arg.name) {
+                                $arg.default_missing_value
+                                    .as_ref()
+                                    .map(|v| v.clone().to_string())
+                                    .transpose()?
+                                    .map(<$ty as ValueSourceParser>::parse)
+                                    .transpose()?
+                            } else {
+                                $arg.default_value
+                                    .as_ref()
+                                    .map(|v| v.clone().to_string())
+                                    .transpose()?
+                                    .map(<$ty as ValueSourceParser>::parse)
+                                    .transpose()?
+                            }
+                        }
+                    }
+
+            };
+        }
 
         macro_rules! get_many {
             ($args:expr, $ty:ty, $name:expr) => {
                 $args
                     .try_get_many::<$ty>($name)
-                    .map_err(|_| {
-                        crate::Error::from(format!(
+                    .map_err(|err| Error::invalid_arguments(err))
+                    .with_context(|| {
+                        format!(
                             "{} type of {} wrong, set `type` to the correct value",
                             $name,
                             stringify!($ty),
-                        ))
+                        )
                     })?
-                    .map(|v| v.collect::<Vec<_>>())
             };
         }
 
@@ -378,71 +395,44 @@ impl ConfigArgCollection {
                 // Many Valued String
                 ConfigArgType::String if arg.many_valued => {
                     get_many!(args, String, &arg.name)
-                        .iter()
-                        .for_each(|v| ctx.insert(&arg.name, &v));
+                        .unwrap_or_default()
+                        .for_each(|v| ctx.insert(&arg.name, v));
                 }
-
-                // Password and File Value String
-                ConfigArgType::String if arg.password && arg.file_value => {
-                    arg_file_value(get_one!(args, String, &arg.name), &arg.name)?
-                        .map(|v| v.clone())
-                        .or_else(|| {
-                            Password::new("Password:")
-                                .without_confirmation()
-                                .prompt()
-                                .ok()
-                        })
-                        .iter()
-                        .for_each(|v| ctx.insert(&arg.name, v))
-                }
-
-                // Password String
-                ConfigArgType::String if arg.password => get_one!(args, String, &arg.name)
-                    .map(|v| v.clone())
-                    .or_else(|| {
-                        Password::new("Password:")
-                            .without_confirmation()
-                            .prompt()
-                            .ok()
-                    })
-                    .iter()
-                    .for_each(|v| ctx.insert(&arg.name, v)),
 
                 // File Value String
                 ConfigArgType::String if arg.file_value => {
-                    arg_file_value(get_one!(args, String, &arg.name), &arg.name)?
-                        .iter()
-                        .for_each(|v| ctx.insert(&arg.name, v))
+                    arg_file_value(get_one!(args, String, arg).as_ref(), &arg.name)?
+                        .inspect(|v| ctx.insert(&arg.name, v));
                 }
 
                 // Just a String
-                ConfigArgType::String => get_one!(args, String, &arg.name)
-                    .iter()
-                    .for_each(|v| ctx.insert(&arg.name, v)),
+                ConfigArgType::String => {
+                    get_one!(args, String, arg).inspect(|v| ctx.insert(&arg.name, v));
+                }
 
                 // Many Valued Number
                 ConfigArgType::Number if arg.many_valued => {
                     get_many!(args, Number, &arg.name)
-                        .iter()
-                        .for_each(|v| ctx.insert(&arg.name, &v));
+                        .unwrap_or_default()
+                        .for_each(|v| ctx.insert(&arg.name, v));
                 }
 
                 // Just A number
-                ConfigArgType::Number => get_one!(args, Number, &arg.name)
+                ConfigArgType::Number => get_one!(args, Number, arg)
                     .iter()
                     .for_each(|v| ctx.insert(&arg.name, v)),
 
                 // Many Valued Boolean
                 ConfigArgType::Bool if arg.many_valued => {
                     get_many!(args, bool, &arg.name)
-                        .iter()
+                        .unwrap_or_default()
                         .for_each(|v| ctx.insert(&arg.name, &v));
                 }
 
                 // Just a Boolean
-                ConfigArgType::Bool => get_one!(args, bool, &arg.name)
-                    .iter()
-                    .for_each(|v| ctx.insert(&arg.name, v)),
+                ConfigArgType::Bool => {
+                    get_one!(args, bool, arg).inspect(|v| ctx.insert(&arg.name, v));
+                }
                 ConfigArgType::Datetime(format) if arg.many_valued => {
                     let dates = get_many!(args, String, &arg.name)
                         .unwrap_or_default()
@@ -465,7 +455,7 @@ impl ConfigArgCollection {
                     dates.iter().for_each(|v| ctx.insert(&arg.name, &v));
                 }
                 ConfigArgType::Datetime(format) => {
-                    get_one!(args, String, &arg.name)
+                    get_one!(args, String, arg)
                         .map(|f| parse_datetime(f))
                         .transpose()
                         .map_err(Error::invalid_arguments)?
@@ -480,8 +470,7 @@ impl ConfigArgCollection {
                         })
                         .transpose()?
                         .map(|f| f.strftime(&format).to_string())
-                        .iter()
-                        .for_each(|v| ctx.insert(&arg.name, &v));
+                        .inspect(|v| ctx.insert(&arg.name, v));
                 }
             }
         }
@@ -548,6 +537,42 @@ where
     de.deserialize_str(av)
 }
 
+/// ValueSourceParser is used to turn a value from a ValueSource into the value we actually
+/// want
+trait ValueSourceParser: Sized {
+    type Error;
+
+    fn parse(value: String) -> Result<Self, Self::Error>;
+}
+
+impl ValueSourceParser for String {
+    type Error = Error;
+
+    fn parse(value: String) -> Result<Self, Self::Error> {
+        Ok(value)
+    }
+}
+
+impl ValueSourceParser for bool {
+    type Error = Error;
+
+    fn parse(value: String) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            _ => Err(Error::invalid_arguments("expected 'true' or 'false'")),
+        }
+    }
+}
+
+impl ValueSourceParser for Number {
+    type Error = Error;
+
+    fn parse(value: String) -> Result<Self, Self::Error> {
+        Number::from_str(&value).context("invalid number")
+    }
+}
+
 /// Implementation of turining a ConfigArg into an Argument for
 /// clap.
 impl TryFrom<ConfigArg> for Arg {
@@ -587,9 +612,23 @@ impl TryFrom<ConfigArg> for Arg {
             .with_some(value.value_delimiter, Arg::value_delimiter)
             .with_some(value.value_terminator, Arg::value_terminator)
             .with_some(value.value_name, Arg::value_name)
-            .with_some(value.default_value, Arg::default_value)
+            .with_some(
+                value.default_value,
+                |arg, value_source| match value_source {
+                    ValueSource::Value(v) => arg.default_value(v),
+                    _ => arg,
+                },
+            )
             .with_some(value.default_values, Arg::default_values)
-            .with_some(value.default_missing_value, Arg::default_missing_value)
+            .with_some(
+                value.default_missing_value,
+                |arg, value_source| match value_source {
+                    ValueSource::Value(v) => {
+                        arg.num_args(0..=1).require_equals(true).default_value(v)
+                    }
+                    _ => arg.num_args(0..=1).require_equals(true),
+                },
+            )
             .with_some(value.default_missing_values, Arg::default_missing_values)
             .with_some(value.env, Arg::env)
             .with_some(value.hide, Arg::hide)
