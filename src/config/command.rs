@@ -11,7 +11,7 @@ use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
 use super::{Attributes, ValueSource};
-use crate::{clap::arg_file_value, Context as _, Error, KResult, Ok, Opt, RenderGroup, When as _};
+use crate::{clap::arg_file_value, Context as _, Error, KResult, Ok, Opt, RenderGroup, When};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
@@ -363,6 +363,11 @@ impl ConfigArgCollection {
                             .map(|v| v.clone().to_string())
                             .transpose()?
                             .map(<$ty as ValueSourceParser>::parse)
+                            .when($arg.required.unwrap_or_default(), |v| if v.is_none() {
+                                Some(Err(Error::invalid_arguments(format!("{} is a required field which was not supplied", $arg.name))))
+                            } else {
+                                v
+                            })
                             .transpose()?
                         }
                     }
@@ -403,7 +408,7 @@ impl ConfigArgCollection {
 
                 // Just a String
                 ConfigArgType::String => {
-                    get_one!(args, String, arg).when(arg.required, |f| ).inspect(|v| ctx.insert(&arg.name, v));
+                    get_one!(args, String, arg).inspect(|v| ctx.insert(&arg.name, v));
                 }
 
                 // Many Valued Number

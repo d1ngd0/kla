@@ -168,7 +168,9 @@ async fn run() -> Result<(), anyhow::Error> {
     log::debug!("Config Contents: {:?}", config);
 
     let repo = ExtensionRepo::try_from(&config.extensions)?;
-    repo.apply(&mut config)?;
+    if config.extensions.enabled {
+        repo.apply(&mut config)?;
+    }
 
     // check the env flag, and then the default config for the correct
     // environment to use. If you ever need to get the environment

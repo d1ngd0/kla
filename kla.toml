@@ -35,6 +35,7 @@ type = "dir"
 path = "conf.d/"
 
 [extensions]
+  enabled = false
   dir = ".extensions/"
 
   [[extensions.registries]]

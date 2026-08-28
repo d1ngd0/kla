@@ -7,6 +7,9 @@ use super::Authentication;
 /// Extensions holds the configuration for extensions
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Extensions {
+    #[serde(rename = "enabled", default = "extension_enabled")]
+    pub enabled: bool,
+
     #[serde(rename = "dir", default = "extension_dir")]
     pub dir: Option<PathBuf>,
 
@@ -29,6 +32,7 @@ impl Extensions {
 impl Default for Extensions {
     fn default() -> Self {
         Self {
+            enabled: extension_enabled(),
             dir: extension_dir(),
             registries: Default::default(),
         }
@@ -40,6 +44,12 @@ impl Default for Extensions {
 fn extension_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("com", "kla", "kla")
         .map(|dir| PathBuf::from(dir.config_dir()).join(".extensions"))
+}
+
+// extension_enabled is the default value for if the extension simple is enabled
+// or not.
+fn extension_enabled() -> bool {
+    return true;
 }
 
 /// Register is used to configure authentication for connecting to a specific
