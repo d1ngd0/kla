@@ -28,6 +28,15 @@ pub trait When: Sized {
         F: Fn(Self) -> Self;
 }
 
+pub trait WhenResult: Sized {
+    type Error;
+
+    /// when calls the underlying builder function if v is true
+    fn when_result<F>(self, v: bool, f: F) -> Result<Self, Self::Error>
+    where
+        F: Fn(Self) -> Result<Self, Self::Error>;
+}
+
 pub trait Ok: Sized {
     /// Error is the type of error value shared between the result coming from the underlying
     /// closure, and the incoming value
@@ -109,21 +118,16 @@ macro_rules! impl_opt {
     };
 }
 
-#[macro_export]
-macro_rules! impl_when {
-    ($for:ty) => {
-        impl crate::opt::When for $for {
-            fn when<F>(self, v: bool, f: F) -> Self
-            where
-                F: Fn(Self) -> Self,
-            {
-                match v {
-                    true => f(self),
-                    false => self,
-                }
-            }
+impl<T> When for T {
+    fn when<F>(self, v: bool, f: F) -> Self
+    where
+        F: Fn(Self) -> Self,
+    {
+        match v {
+            true => f(self),
+            false => self,
         }
-    };
+    }
 }
 
 #[macro_export]

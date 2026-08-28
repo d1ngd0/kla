@@ -6,7 +6,7 @@ use reqwest::{
 use std::{collections::HashMap, time::Duration};
 use std::{fmt::Display, str::from_utf8};
 
-use crate::{clap::edit_value, impl_opt, impl_when, Error, KResult, RenderGroup};
+use crate::{clap::edit_value, impl_opt, Error, KResult, RenderGroup};
 
 #[derive(Debug, Clone)]
 /// KeyValue enables you to turn a string like `key=value` into an actual key value
@@ -236,5 +236,5 @@ impl KlaRequest for Request {
 }
 
 impl_opt!(RequestBuilder, crate::Error);
-impl_when!(Request);
-impl_when!(KResult<Request>);
+// impl_when!(Request);
+// impl_when!(KResult<Request>);

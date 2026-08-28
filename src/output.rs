@@ -1,6 +1,6 @@
 use std::{fmt::Debug, io::Cursor};
 
-use crate::{impl_opt, impl_when, ContextBuilder, FetchMany, KResult};
+use crate::{impl_opt, ContextBuilder, FetchMany, KResult};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use reqwest::Response;
 use tera::Tera;
@@ -199,5 +199,5 @@ impl From<OwnedOuput> for Cursor<String> {
     }
 }
 
-impl_when!(OutputBuilder);
+// impl_when!(OutputBuilder);
 impl_opt!(OutputBuilder, crate::Error);

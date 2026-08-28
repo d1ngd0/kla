@@ -1,4 +1,4 @@
-use crate::{impl_opt, impl_when, Error, KResult};
+use crate::{impl_opt, Error, KResult};
 
 use reqwest::{Certificate, ClientBuilder};
 use std::path::PathBuf;
@@ -142,4 +142,4 @@ impl KlaClientBuilder for ClientBuilder {
 }
 
 impl_opt!(ClientBuilder, crate::Error);
-impl_when!(ClientBuilder);
+// impl_when!(ClientBuilder);

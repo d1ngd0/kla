@@ -169,3 +169,55 @@ A much longer description"""
   # what you are doing
   #accept_invalid_hostnames=false
 ```
+
+## ValueSource
+
+Some of the fields in kla configs are ValueSource types, which can be set in
+multiple ways:
+
+- A literal value
+- A Filepath, with the value stored in that file
+- An Environment Variable
+- Prompting the user for the value.
+
+<sub>_Any field which is a `ValueSource` type will be stated in the documentation. If it isn't called out and you find it make a pr or create an issue._</sub>
+
+```toml
+# Literal value
+password = "hunter02"
+
+# File Path
+# `path` defines a path to the file with the password in it. Relative paths are resolved from the location of the file referencing it.
+# `trim` _optional_ is used to trim the value within the file, removing any trailing whitespace from the files content
+password = { path = "/etc/kla/super-secure-password", trim = true }
+
+# Environment Variable
+# `env` specifies the environment variable to collect the value from
+# `default` _optional_ specifies the default value to use if the variable is not set
+# If the value is not set, and there is no default specified, and error will be returned stating the variable is not set
+password = { env = "KLA_ENVIRONMENT_PASSWORD" }
+
+# Password Prompt
+# `password` defines the prompt you want to show the user to collect the
+# secret value. The value they type in will be masked.
+password = { password = "Users Password: " }
+
+# Text
+# `text` defines the prompt you want to show the user to collect the
+# secret value. The value they type in will be masked.
+name = { text = "Username: " }
+
+# Editor
+# `editor` opens your `${EDITOR}` with the supplied text as
+# the placeholder. When the user saves and closes the editor
+# it returns the temporary files contents.
+description = { editor = "Description for user..." }
+
+# Select
+# creates a fuzzy selector in the terminal
+# you can either provide a literal list of strings or
+# supply a command which turns each new line into a selection
+region = { select = "select your region", "items" = ["us-central1", "us-east1"] }
+
+zone = { select = "", items = {command = "/bin/bash", args = ["-c", "kla run zones list | jq '.items[].name' -r"]}}
+```

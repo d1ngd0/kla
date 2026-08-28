@@ -242,9 +242,10 @@ text
   # https://docs.rs/clap/latest/clap/struct.Arg.html#method.raw
   raw = false
 
-  # The string representation of your default value. For Numbers and
-  # Bools you should specify the value as a string
-  # https://docs.rs/clap/latest/clap/struct.Arg.html#method.default_value
+  # Defines the default value to use when a value isn't present.
+  # While you can just specify the string representation of your value here,
+  # the attribute is a ValueSource type, which allows for
+  # richer features to set the value
   default_value = "something"
 
   # The string representation of your values when `many_valued = true`
@@ -252,8 +253,7 @@ text
   default_values = ["something", "Another Thing"]
 
   # When a flag is present, but no value was given, you can specify the
-  # default value with `default_missing_value`
-  # https://docs.rs/clap/latest/clap/struct.Arg.html#method.default_missing_value
+  # default value. This field is a `ValueSource`.
   default_missing_value = "something"
 
   # When a flag is present, but no value was given, you can specify the
@@ -396,6 +396,27 @@ failure_output = "-"
 
 # Settings allow you to specify request level settings for the template. These settings are the same as specified in [environments](000_environments.md).
 # [settings]
+```
+
+## Helpful Patterns
+
+Here are a few examples of patterns for a richer customer experience when creating templates.
+
+### Default Flag Values
+
+The following will prompt the user for a name **only when** the flag `--name` was specified, but no value was given.
+
+```toml
+[[arg]]
+  name = "name"
+  long = "name"
+  help = "The name of the customer"
+  default_missing_value = { text = "Customer Name: " }
+```
+
+```bash
+$ kla run customers --name
+? Customer Name:
 ```
 
 ## Sub Commands

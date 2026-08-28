@@ -11,7 +11,7 @@ use serde::{de::Visitor, Deserialize, Deserializer};
 use tera::{Context, Number, Tera};
 
 use super::{Attributes, ValueSource};
-use crate::{clap::arg_file_value, Context as _, Error, KResult, Ok, Opt, RenderGroup};
+use crate::{clap::arg_file_value, Context as _, Error, KResult, Ok, Opt, RenderGroup, When as _};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConfigCommand {
@@ -356,18 +356,14 @@ impl ConfigArgCollection {
                             if args.contains_id(&$arg.name) {
                                 $arg.default_missing_value
                                     .as_ref()
-                                    .map(|v| v.clone().to_string())
-                                    .transpose()?
-                                    .map(<$ty as ValueSourceParser>::parse)
-                                    .transpose()?
                             } else {
                                 $arg.default_value
                                     .as_ref()
-                                    .map(|v| v.clone().to_string())
-                                    .transpose()?
-                                    .map(<$ty as ValueSourceParser>::parse)
-                                    .transpose()?
                             }
+                            .map(|v| v.clone().to_string())
+                            .transpose()?
+                            .map(<$ty as ValueSourceParser>::parse)
+                            .transpose()?
                         }
                     }
 
@@ -407,7 +403,7 @@ impl ConfigArgCollection {
 
                 // Just a String
                 ConfigArgType::String => {
-                    get_one!(args, String, arg).inspect(|v| ctx.insert(&arg.name, v));
+                    get_one!(args, String, arg).when(arg.required, |f| ).inspect(|v| ctx.insert(&arg.name, v));
                 }
 
                 // Many Valued Number
@@ -616,7 +612,7 @@ impl TryFrom<ConfigArg> for Arg {
                 value.default_value,
                 |arg, value_source| match value_source {
                     ValueSource::Value(v) => arg.default_value(v),
-                    _ => arg,
+                    _ => arg.required(false),
                 },
             )
             .with_some(value.default_values, Arg::default_values)
@@ -626,7 +622,7 @@ impl TryFrom<ConfigArg> for Arg {
                     ValueSource::Value(v) => {
                         arg.num_args(0..=1).require_equals(true).default_value(v)
                     }
-                    _ => arg.num_args(0..=1).require_equals(true),
+                    _ => arg.num_args(0..=1).require_equals(true).required(false),
                 },
             )
             .with_some(value.default_missing_values, Arg::default_missing_values)
