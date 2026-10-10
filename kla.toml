@@ -30,14 +30,14 @@ default_environment = ".env"
 # [[config]]
 #   my_random_attribute = "something"
 # ```
-[[config]]
-type = "dir"
-path = "conf.d/"
-
-[extensions]
-  enabled = false
-  dir = ".extensions/"
-
-  [[extensions.registries]]
-    prefix = "docker.paulmontag.info/"
-    authentication = { type = "basic", username = "paul", password = { password = "docker.paulmontag.info registry password: " } }
+#[[config]]
+#type = "dir"
+#path = "conf.d/"
+#
+#[extensions]
+#  enabled = false
+#  dir = ".extensions/"
+#
+#  [[extensions.registries]]
+#    prefix = "docker.paulmontag.info/"
+#    authentication = { type = "basic", username = "paul", password = { password = "docker.paulmontag.info registry password: " } }
