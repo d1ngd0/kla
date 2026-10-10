@@ -29,6 +29,9 @@ pub struct ConfigCommand {
     #[serde(rename = "arg", default)]
     args: ConfigArgCollection,
 
+    #[serde(rename = "aliases", default)]
+    aliases: Option<Vec<String>>,
+
     #[serde(rename = "body")]
     body: Option<String>,
     #[serde(rename = "uri", default = "default_uri")]
@@ -211,6 +214,7 @@ impl TryFrom<ConfigCommand> for Command {
             .name(&value.name)
             .with_some(value.short_description.as_ref(), Command::about)
             .with_some(value.description.as_ref(), Command::long_about)
+            .with_some(value.aliases.as_ref(), Command::aliases)
             .with_ok_value(<Vec<Arg>>::try_from(value.args), Command::args)
             .with_context(|| format!("{} invalid command configuration", &value.name))?;
 

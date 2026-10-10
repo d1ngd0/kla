@@ -35,6 +35,7 @@ uri = "/api/v1/doc/{{ id }}"
 # OooOOooOO templating
 method = "{% if delete %}DELETE{% else %}GET{% endif %}"
 help = "View a document"
+aliases = ["d"]
 
 [[arg]]
   name = "id"
@@ -137,6 +138,9 @@ short_description = "Example template, helping define how to make templates"
 description = """
 A Very long description, though this one isn't
 """
+
+# The aliases for this command.
+aliases = ["alias"]
 
 # [[arg]] is an array that we are adding to. This adds a `message` argument, which will be the first argument to the command since it is the first one specified.
 # Where this argument to specify a `short` or `long` value it would be passed in as a flag instead.
